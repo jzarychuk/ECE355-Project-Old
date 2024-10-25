@@ -53,7 +53,7 @@
 #pragma GCC diagnostic ignored "-Wreturn-type"
 
 void myADC_Init(void);
-void myGPIOA_Init(void);
+void myDAC_Init(void);
 
 /*** Call this function to boost the STM32F0xx clock to 48 MHz ***/
 
@@ -96,7 +96,7 @@ int main(int argc, char* argv[]) {
 	trace_printf("System clock: %u Hz\n", SystemCoreClock);
 
 	myADC_Init();
-	myGPIOA_Init();
+	myDAC_Init();
 
 	// Infinite loop
 	while(1) {
@@ -104,6 +104,7 @@ int main(int argc, char* argv[]) {
 		while((ADC1->ISR & 0x2) == 0); // Wait for end of conversion flag (Bit 2) to be set
 		unsigned int adc_value = (ADC1->DR & 0xFFF); // Read low 12 bits from ADC1 data register
 		trace_printf("Value going to ADC from POT: %u\n", adc_value); // Print value (0-4095) (2^12)
+		DAC1->DHR12R1 = ADC1->DR & 0xFFF; // Send value from ADC to DAC
 	}
 }
 
@@ -112,8 +113,8 @@ void myADC_Init() {
 	// Enable clock
 	RCC->APB2ENR |= 0x200; // Set Bit 9 (see "Interfacing" Slide 15)
 
-	// Configure PA4 and PA5 as analog
-	GPIOA->MODER |= 0xF00; // Set Bit 8-11 (see "I/O" Slide 25)
+	// Configure PA5 as analog
+	GPIOA->MODER |= 0xC00; // Set Bit 10-11 (see "I/O" Slide 25)
 
 	// Configure ADC
 	ADC1->CFGR1 &= 0xFFFFFFE7; // Clear Bit 3-4 to choose 12-bit resolution (see "Interfacing" Slide 10)
@@ -131,6 +132,20 @@ void myADC_Init() {
 	ADC1->CR |= 0x1; // Set Bit 0 (see "Interfacing" Slide 8)
 
 	while(((ADC1->ISR & 0x1) == 0)); // Wait for ADC ready flag to be set
+
+}
+
+void myDAC_Init() {
+
+	// Enable clock
+	RCC->APB1ENR |= 0x20000000; // Set Bit 29 (see "Interfacing" Slide 15)
+
+	// Configure PA4 as analog
+	GPIOA->MODER |= 0x300; // Set Bit 8-9 (see "I/O" Slide 25)
+
+	// Configure DAC
+	DAC1->CR |= 0x1; // Set Bit 0 to enable Channel 1 (see "Interfacing" Slide 14)
+	DAC1->CR &= 0xFFFFFFF9; // Clear Bit 1-2 to enable output buffer and disable trigger (see "Interfacing" Slide 14)
 
 }
 
