@@ -13,7 +13,6 @@ unsigned int freq = 0;
 unsigned int res = 0;
 unsigned int inSig = 0; // Using input EXTI1(NE555 timer)/EXTI2(function generator) = 0/1
 unsigned int first_edge = 1;  // Flag for entering edge interrupter
-unsigned int first_button_edge = 1; // Flag for button edge
 
 #define myTIM2_PRESCALER ((uint16_t)0x0000) // Clock prescaler for TIM2 timer (no prescaling)
 #define myTIM2_PERIOD ((uint32_t)0xFFFFFFFF) // Maximum possible setting for overflow
