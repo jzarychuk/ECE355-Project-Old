@@ -1,52 +1,9 @@
-/*
- * This file is part of the µOS++ distribution.
- *   (https://github.com/micro-os-plus)
- * Copyright (c) 2014 Liviu Ionescu.
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use,
- * copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom
- * the Software is furnished to do so, subject to the following
- * conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
- * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- * OTHER DEALINGS IN THE SOFTWARE.
- */
-
-// ----------------------------------------------------------------------------
-
 #include <stdio.h>
 #include <stdlib.h>
 #include "diag/trace.h"
 #include "cmsis/cmsis_device.h"
 
-// ----------------------------------------------------------------------------
-//
-// STM32F0 empty sample (trace via DEBUG).
-//
-// Trace support is enabled by adding the TRACE macro definition.
-// By default the trace messages are forwarded to the DEBUG output,
-// but can be rerouted to any device or completely suppressed, by
-// changing the definitions required in system/src/diag/trace-impl.c
-// (currently OS_USE_TRACE_ITM, OS_USE_TRACE_SEMIHOSTING_DEBUG/_STDOUT).
-//
-
-// ----- main() ---------------------------------------------------------------
-
-// Sample pragmas to cope with warnings. Please note the related line at
-// the end of this function, used to pop the compiler diagnostics status.
+// Sample pragmas to cope with warnings. Please note the related line at the end of this function, used to pop the compiler diagnostics status.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wmissing-declarations"
@@ -55,15 +12,15 @@
 unsigned int freq = 0;
 unsigned int res = 0;
 unsigned int inSig = 0; // Using EXTI1/EXTI2 = 0/1
-unsigned int first_edge = 1;		// Flag for entering edge interrupter
-unsigned int first_button_edge = 1;  // Flag for button edge
+unsigned int first_edge = 1;  // Flag for entering edge interrupter
+unsigned int first_button_edge = 1; // Flag for button edge
 
-#define myTIM2_PRESCALER ((uint16_t)0x0000) /* Clock prescaler for TIM2 timer: no prescaling */
-#define myTIM2_PERIOD ((uint32_t)0xFFFFFFFF) /* Maximum possible setting for overflow */
+#define myTIM2_PRESCALER ((uint16_t)0x0000) // Clock prescaler for TIM2 timer (no prescaling)
+#define myTIM2_PERIOD ((uint32_t)0xFFFFFFFF) // Maximum possible setting for overflow
 
+void myGPIOA_Init(void);
 void myADC_Init(void);
 void myDAC_Init(void);
-void myGPIOA_Init(void);
 void myTIM2_Init(void);
 void myEXTI_Init(void);
 
@@ -230,9 +187,7 @@ unsigned char Characters[][8] = {
     {0b00001000, 0b00011100, 0b00101010, 0b00001000, 0b00001000,0b00000000, 0b00000000, 0b00000000}   // <-
 };
 
-
-/*** Call this function to boost the STM32F0xx clock to 48 MHz ***/
-
+// Call this function to boost the STM32F0xx clock to 48 MHz
 void SystemClock48MHz(void) {
 
 	// Disable the PLL
@@ -263,25 +218,42 @@ int main(int argc, char* argv[]) {
 	SystemClock48MHz();
 	trace_printf("System clock: %u Hz\n", SystemCoreClock);
 
+	myGPIOA_Init();
 	myADC_Init();
 	myDAC_Init();
-	myGPIOA_Init();		/* Initialize I/O port PA */
-	myTIM2_Init();		/* Initialize timer TIM2 */
-	myEXTI_Init();		/* Initialize EXTI */
+	myTIM2_Init();
+	myEXTI_Init();
 	//oled_config();
 
 	// Infinite loop
 	while(1) {
-		ADC1->CR |= 0x4;  // Set Bit 2 to start conversion process (see "Interfacing" Slide 8)
-		while((ADC1->ISR & 0x2) == 0); // Wait for end of conversion flag (Bit 2) to be set
-		unsigned int adc_value = (ADC1->DR & 0xFFF); // Read low 12 bits from ADC1 data register
-		trace_printf("Value going to ADC from POT: %u\n", adc_value); // Print value (0-4095) (2^12)
-		DAC1->DHR12R1 = ADC1->DR & 0xFFF; // Send value from ADC to DAC
-		//refresh_OLED();
+		
+		// Set Bit 2 to start conversion process (see "Interfacing" Slide 8)
+		ADC1->CR |= 0x4;
+		
+		// Wait for end of conversion flag (Bit 2) to be set
+		while((ADC1->ISR & 0x2) == 0);
+		
+		// Read low 12 bits from ADC1 data register
+		unsigned int adc_value = (ADC1->DR & 0xFFF);
+		
+		// Print value (0-4095)
+		trace_printf("Value going to ADC from POT: %u\n", adc_value);
 
+		// Send value from ADC to DAC
+		DAC1->DHR12R1 = ADC1->DR & 0xFFF;
+		
+		//refresh_OLED();
 
 	}
 
+}
+
+void myGPIOA_Init() {
+	
+	// Enable clock
+	RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
+	
 }
 
 void myADC_Init() {
@@ -307,7 +279,8 @@ void myADC_Init() {
 	// Enable ADC process (basic initialization)
 	ADC1->CR |= 0x1; // Set Bit 0 (see "Interfacing" Slide 8)
 
-	while(((ADC1->ISR & 0x1) == 0)); // Wait for ADC ready flag to be set
+	// Wait for ADC ready flag to be set
+	while(((ADC1->ISR & 0x1) == 0));
 
 }
 
@@ -324,6 +297,204 @@ void myDAC_Init() {
 	DAC1->CR &= 0xFFFFFFF9; // Clear Bit 1-2 to enable output buffer and disable trigger (see "Interfacing" Slide 14)
 
 }
+
+void myTIM2_Init() {
+	
+	// Enable clock
+	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
+
+	// Configure: buffer auto-reload, count up, stop on overflow, enable update events, interrupt on overflow only
+	TIM2->CR1 = ((uint16_t)0x008C);
+
+	// Set clock prescaler value
+	TIM2->PSC = myTIM2_PRESCALER;
+	
+	// Set auto-reloaded delay
+	TIM2->ARR = myTIM2_PERIOD;
+
+	// Update timer registers
+	TIM2->EGR = ((uint16_t)0x0001);
+
+	// Assign TIM2 interrupt priority = 0 in NVIC
+	NVIC_SetPriority(TIM2_IRQn, 0); // Same as: NVIC->IP[3] = ((uint32_t)0x00FFFFFF);
+
+	// Enable TIM2 interrupts in NVIC
+	NVIC_EnableIRQ(TIM2_IRQn); // Same as: NVIC->ISER[0] = ((uint32_t)0x00008000) */
+
+	// Enable update interrupt generation
+	TIM2->DIER |= TIM_DIER_UIE;
+	
+	// Start counting timer pulses
+	// TIM2->CR1 |= TIM_CR1_CEN; // THIS IS COMMENTED OUT IN THE LAB 2 CODE
+	
+}
+
+void TIM2_IRQHandler() {
+	
+	// Check if update interrupt flag is set
+	if ((TIM2->SR & TIM_SR_UIF) != 0) {
+		
+		trace_printf("\nOverflow!\n");
+
+		// Clear update interrupt flag
+		TIM2->SR &= ~(TIM_SR_UIF);
+
+		// Restart stopped timer
+		TIM2->CR1 |= TIM_CR1_CEN;
+		
+	}
+	
+}
+
+void myEXTI_Init() {
+
+	// Map EXTI0-2 lines to PA0-2
+	SYSCFG->EXTICR[0] &= ((uint16_t)0xF000); //  to enable PA0-2 and keep other bits same 1111 0000 0000 0000 (see reference manual Page 172)
+
+	// EXTI0-2 line interrupts: set rising-edge trigger
+	EXTI->RTSR |= ((uint32_t)0x00000007);  // Set bits TR0-2 to 1 to enable (see reference manual Page 200)
+
+	// Unmask interrupts from EXTI0-2 lines
+	EXTI->IMR |= ((uint32_t)0x00000007); // Set bits MR0-2 to 1 to unmask (see reference manual Page 199)
+
+	// Assign EXTI0-3 interrupt priority = 0 in NVIC (we are not using EXTI3)
+	NVIC_SetPriority(EXTI0_1_IRQn, 0); // Found in header, setting lines 0-1 to 0 // (can also use NVIC->IP)
+	NVIC_SetPriority(EXTI2_3_IRQn, 0); // Found in header, setting lines 2-3 to 0 // (can also use NVIC->IP)
+
+	// Enable EXTI interrupts in NVIC (we are not using EXTI3)
+	NVIC_EnableIRQ(EXTI0_1_IRQn); // Enable interrupts for EXTI0 (button) and EXTI1 (NE555 timer)
+	NVIC_EnableIRQ(EXTI2_3_IRQn); // Enable interrupts for EXTI2 (function generator) and EXTI3 (not used)
+
+}
+
+// This handler is declared in system/src/cmsis/vectors_stm32f051x8.c
+void EXTI0_1_IRQHandler() {
+	
+	volatile unsigned int count = 0;
+	volatile double sig_period = 0;
+    volatile double sig_frequency = 0;
+    volatile unsigned int uint_sig_period = 0;
+    volatile unsigned int uint_sig_frequency = 0;
+
+	if ((EXTI->PR & EXTI_PR_PR0) != 0) {	// Button interrupt handler
+		// 2. Clear EXTI1 interrupt pending flag (EXTI->PR).
+		EXTI->PR |= ((uint32_t)0x00000001);		//NOTE: A pending register (PR) bit is cleared by writing 1 to it.
+
+		inSig ^= 0x1;					// Switch which input EXTI1(timer)/EXTI2(func gen) = 0/1
+
+		if(inSig == 0){ // EXTI1(timer)/EXTI2(sig) = 0/1
+			EXTI->IMR &= 0xFFFFFFFFB; // Disable IR 2 1011
+			EXTI->IMR |= 0x2; // Enable IR 1 0010
+
+		}else{
+			EXTI->IMR &= 0xFFFFFFFD; // Disable IR1 1101
+			EXTI->IMR |= 0x4; // Enable IR2 0100
+
+		}
+	}
+
+
+	if ((EXTI->PR & EXTI_PR_PR1) != 0) // For measuring frequency on EXTI1 (NE555 Timer)
+	{
+		// 2. Clear EXTI1 interrupt pending flag (EXTI->PR).
+		EXTI->PR |= ((uint32_t)0x00000002);		//NOTE: A pending register (PR) bit is cleared by writing 1 to it.
+
+		// 1. If this is the first edge:
+		if(first_edge == 1)
+		{
+			//	- Clear count register (TIM2->CNT).
+			TIM2->CNT = ((uint32_t)0x00000000);
+
+			//	- Start timer (TIM2->CR1).
+			TIM2->CR1 |= ((uint16_t)0x0001);		// Or to keep everything else and only set bit0 to 1
+			first_edge = 0;
+
+		}else{//    Else (this is the second edge):
+			//	- Stop timer (TIM2->CR1).
+			TIM2->CR1 &= ((uint16_t)0xFFFE);		// E hex = 1110 bin, so we only disable the bit we want
+
+			//	- Read out count register (TIM2->CNT).
+			count = TIM2->CNT;
+
+			//	- Calculate signal period and frequency.
+			sig_period = count/48.0;		// Change from cpu freq (48MHz to microseconds)
+			sig_frequency = (1000000.0/sig_period) + 0.5;	// For double to int rounding
+
+			uint_sig_period = (unsigned int) sig_period;
+			uint_sig_frequency = (unsigned int) sig_frequency;
+
+
+			//	- Print calculated values to the console.
+			trace_printf("\nTimer Count is:\t %u \n", count);
+
+			trace_printf("Timer   Period is:\t %u us\n", uint_sig_period);
+			trace_printf("Timer     Frequency is:\t %u Hz\n\n", uint_sig_frequency);		// test for more int options
+			//	  NOTE: Function trace_printf does not work
+			//	  with floating-point numbers: you must use
+			//	  "unsigned int" type to print your signal
+			//	  period and frequency.
+
+			first_edge = 1;
+		}
+
+	}
+
+}
+
+// This handler is declared in system/src/cmsis/vectors_stm32f051x8.c
+void EXTI2_3_IRQHandler() {
+
+	volatile unsigned int count = 0;
+	volatile double sig_period = 0;
+    volatile double sig_frequency = 0;
+    volatile unsigned int uint_sig_period = 0;
+    volatile unsigned int uint_sig_frequency = 0;
+
+	// Check if EXTI2 interrupt pending flag is set (for the function generator)
+	if ((EXTI->PR & EXTI_PR_PR2) != 0) {
+		
+		// Clear EXTI2 interrupt pending flag
+		EXTI->PR |= ((uint32_t)0x00000004); // A pending register (PR) bit is cleared by writing 1 to it
+
+		// Handle first edge
+		if(first_edge == 1) {
+			// Clear count register
+			TIM2->CNT = ((uint32_t)0x00000000);
+			// Start timer
+			TIM2->CR1 |= ((uint16_t)0x0001);
+			// Update flag
+			first_edge = 0;
+		}
+			
+		// Handle second edge
+		else {
+			// Stop timer
+			TIM2->CR1 &= ((uint16_t)0xFFFE);
+			// Read out count register
+			count = TIM2->CNT;
+			// Calculate signal period by changing from CPU frequency (48MHz) to microseconds
+			sig_period = count/48.0;
+			// Calculate signal frequency (+0.5 for rounding)
+			sig_frequency = (1000000.0/sig_period) + 0.5;
+			// Convert to unsigned int for printing
+			uint_sig_period = (unsigned int) sig_period;
+			uint_sig_frequency = (unsigned int) sig_frequency;
+			// Print calculated values to the console
+			trace_printf("Signal (Function Generator) Period:    %u us\n", uint_sig_period);
+			trace_printf("Signal (Function Generator) Frequency: %u Hz\n", uint_sig_frequency);
+			// Reset flag
+			first_edge = 1;
+		}
+		
+	}
+	
+}
+
+
+
+
+
+// NOT USED YET
 
 void refresh_OLED(void) {
 
@@ -396,7 +567,7 @@ void oled_Write(unsigned char Value) {
 
 }
 
-void oled_config(void){
+void oled_config(void) {
 
 	// Don't forget to enable GPIOB clock in RCC
 	// Don't forget to configure PB3/PB5 as AF0
@@ -445,215 +616,4 @@ void oled_config(void){
 
 }
 
-void myGPIOA_Init() {
-	/* Enable clock for GPIOA peripheral */
-	RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
-
-	/* Configure PA0 as input */
-	GPIOA->MODER &= ~(GPIO_MODER_MODER0);
-	/* Ensure no pull-up/pull-down for PA0 */
-	GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPDR0);
-}
-
-void myTIM2_Init()
-{
-	/* Enable clock for TIM2 peripheral */
-	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
-
-	/* Configure TIM2: buffer auto-reload, count up, stop on overflow,
-	 * enable update events, interrupt on overflow only */
-	TIM2->CR1 = ((uint16_t)0x008C);
-
-	/* Set clock prescaler value */
-	TIM2->PSC = myTIM2_PRESCALER;
-	/* Set auto-reloaded delay */
-	TIM2->ARR = myTIM2_PERIOD;
-
-	/* Update timer registers */
-	TIM2->EGR = ((uint16_t)0x0001);
-
-	/* Assign TIM2 interrupt priority = 0 in NVIC */
-	NVIC_SetPriority(TIM2_IRQn, 0);
-	// Same as: NVIC->IP[3] = ((uint32_t)0x00FFFFFF);
-
-	/* Enable TIM2 interrupts in NVIC */
-	NVIC_EnableIRQ(TIM2_IRQn);
-	// Same as: NVIC->ISER[0] = ((uint32_t)0x00008000) */
-
-	/* Enable update interrupt generation */
-	TIM2->DIER |= TIM_DIER_UIE;
-	/* Start counting timer pulses */
-	TIM2->CR1 |= TIM_CR1_CEN;
-}
-
-/* This handler is declared in system/src/cmsis/vectors_stm32f051x8.c */
-void TIM2_IRQHandler()
-{
-	/* Check if update interrupt flag is indeed set */
-	if ((TIM2->SR & TIM_SR_UIF) != 0)
-	{
-		trace_printf("\n*** Overflow! ***\n");
-
-		/* Clear update interrupt flag */
-		// Relevant register: TIM2->SR
-		TIM2->SR &= ~(TIM_SR_UIF);
-
-		/* Restart stopped timer */
-		// Relevant register: TIM2->CR1
-		TIM2->CR1 |= TIM_CR1_CEN;
-	}
-}
-
-void myEXTI_Init() {
-
-	// Map EXTI0-2 lines to PA0-2
-	SYSCFG->EXTICR[0] &= ((uint16_t)0xF000); //  to enable PA2 and keep other bits same 1111 0000 0000 0000
-
-	/* EXTI2 line interrupts: set rising-edge trigger */
-	// Relevant register: EXTI->RTSR
-	EXTI->RTSR |= ((uint32_t)0x00000007);		// Set TR0-2 to 1 to enable, keep everything else same (7 hex = 0111 Bin
-
-	/* Unmask interrupts from EXTI0-2 line */
-	// Relevant register: EXTI->IMR
-	EXTI->IMR |= ((uint32_t)0x00000007);		// Same as above for same (2)
-
-	/* Assign EXTI2 interrupt priority = 0 in NVIC */
-	// Relevant register: NVIC->IP[2], or use NVIC_SetPriority
-	NVIC_SetPriority(EXTI0_1_IRQn, 0);		// Found in header, setting lines 0-1 to 0
-	NVIC_SetPriority(EXTI2_3_IRQn, 0);		// Found in header, setting lines 2-3 to 0
-
-	// Enable EXTI interrupts in NVIC // Relevant register: NVIC->ISER[0], or use NVIC_EnableIRQ
-	NVIC_EnableIRQ(EXTI0_1_IRQn); // Enable interrupts for EXTI0-1 (button and NE555 Timer)
-	NVIC_EnableIRQ(EXTI2_3_IRQn); // Enable interrupts for EXTI2 (Function Generator)
-
-}
-
-void EXTI0_1_IRQHandler() {
-	volatile unsigned int count = 0;
-	volatile double sig_period = 0;
-    volatile double sig_frequency = 0;
-    volatile unsigned int uint_sig_period = 0;
-    volatile unsigned int uint_sig_frequency = 0;
-
-	if ((EXTI->PR & EXTI_PR_PR0) != 0) {	// Button interrupt handler
-		// 2. Clear EXTI1 interrupt pending flag (EXTI->PR).
-		EXTI->PR |= ((uint32_t)0x00000001);		//NOTE: A pending register (PR) bit is cleared by writing 1 to it.
-
-		inSig ^= 0x1;					// Switch which input EXTI1(timer)/EXTI2(func gen) = 0/1
-
-		if(inSig == 0){ // EXTI1(timer)/EXTI2(sig) = 0/1
-			EXTI->IMR &= 0xFFFFFFFFB; // Disable IR 2 1011
-			EXTI->IMR |= 0x2; // Enable IR 1 0010
-
-		}else{
-			EXTI->IMR &= 0xFFFFFFFD; // Disable IR1 1101
-			EXTI->IMR |= 0x4; // Enable IR2 0100
-
-		}
-	}
-
-
-	if ((EXTI->PR & EXTI_PR_PR1) != 0) // For measuring frequency on EXTI1 (NE555 Timer)
-	{
-		// 2. Clear EXTI1 interrupt pending flag (EXTI->PR).
-		EXTI->PR |= ((uint32_t)0x00000002);		//NOTE: A pending register (PR) bit is cleared by writing 1 to it.
-
-		// 1. If this is the first edge:
-		if(first_edge == 1)
-		{
-			//	- Clear count register (TIM2->CNT).
-			TIM2->CNT = ((uint32_t)0x00000000);
-
-			//	- Start timer (TIM2->CR1).
-			TIM2->CR1 |= ((uint16_t)0x0001);		// Or to keep everything else and only set bit0 to 1
-			first_edge = 0;
-
-		}else{//    Else (this is the second edge):
-			//	- Stop timer (TIM2->CR1).
-			TIM2->CR1 &= ((uint16_t)0xFFFE);		// E hex = 1110 bin, so we only disable the bit we want
-
-			//	- Read out count register (TIM2->CNT).
-			count = TIM2->CNT;
-
-			//	- Calculate signal period and frequency.
-			sig_period = count/48.0;		// Change from cpu freq (48MHz to microseconds)
-			sig_frequency = (1000000.0/sig_period) + 0.5;	// For double to int rounding
-
-			uint_sig_period = (unsigned int) sig_period;
-			uint_sig_frequency = (unsigned int) sig_frequency;
-
-
-			//	- Print calculated values to the console.
-			trace_printf("\nTimer Count is:\t %u \n", count);
-
-			trace_printf("Timer   Period is:\t %u us\n", uint_sig_period);
-			trace_printf("Timer     Frequency is:\t %u Hz\n\n", uint_sig_frequency);		// test for more int options
-			//	  NOTE: Function trace_printf does not work
-			//	  with floating-point numbers: you must use
-			//	  "unsigned int" type to print your signal
-			//	  period and frequency.
-
-			first_edge = 1;
-		}
-
-	}
-
-}
-
-/* This handler is declared in system/src/cmsis/vectors_stm32f051x8.c */
-void EXTI2_3_IRQHandler()
-{
-	// Declare/initialize your local variables here...
-	volatile unsigned int count = 0;
-	volatile double sig_period = 0;
-    volatile double sig_frequency = 0;
-    volatile unsigned int uint_sig_period = 0;
-    volatile unsigned int uint_sig_frequency = 0;
-
-	/* Check if EXTI2 interrupt pending flag is indeed set */
-	if ((EXTI->PR & EXTI_PR_PR2) != 0){
-	EXTI->PR |= ((uint32_t)0x00000004);		// 2. Clear EXTI2 interrupt pending flag (EXTI->PR).
-
-		// 1. If this is the first edge:
-		if(first_edge == 1)
-		{
-			//	- Clear count register (TIM2->CNT).
-			TIM2->CNT = ((uint32_t)0x00000000);
-
-			//	- Start timer (TIM2->CR1).
-			TIM2->CR1 |= ((uint16_t)0x0001);		// Or to keep everything else and only set bit0 to 1
-			first_edge = 0;
-
-		}else{//    Else (this is the second edge):
-			//	- Stop timer (TIM2->CR1).
-			TIM2->CR1 &= ((uint16_t)0xFFFE);		// E hex = 1110 bin, so we only disable the bit we want
-
-			//	- Read out count register (TIM2->CNT).
-			count = TIM2->CNT;
-
-			//	- Calculate signal period and frequency.
-			sig_period = count/48.0;		// Change from cpu freq (48MHz to microseconds)
-			sig_frequency = (1000000.0/sig_period) + 0.5;	// For double to int rounding
-
-			uint_sig_period = (unsigned int) sig_period;
-			uint_sig_frequency = (unsigned int) sig_frequency;
-
-
-			//	- Print calculated values to the console.
-			trace_printf("\nSignal Count is:\t %u \n", count);
-
-			trace_printf("Signal   Period is:\t %u us\n", uint_sig_period);
-			trace_printf("Signal     Frequency is:\t %u Hz\n\n", uint_sig_frequency);		// test for more int options
-			//	  NOTE: Function trace_printf does not work
-			//	  with floating-point numbers: you must use
-			//	  "unsigned int" type to print your signal
-			//	  period and frequency.
-
-			first_edge = 1;
-		}
-	}
-}
-
 #pragma GCC diagnostic pop
-
-// ----------------------------------------------------------------------------
