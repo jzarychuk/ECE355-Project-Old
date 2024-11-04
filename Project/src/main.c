@@ -11,7 +11,7 @@
 
 unsigned int freq = 0;
 unsigned int res = 0;
-unsigned int inSig = 0; // Using EXTI1/EXTI2 = 0/1
+unsigned int inSig = 0; // Using input EXTI1(NE555 timer)/EXTI2(function generator) = 0/1
 unsigned int first_edge = 1;  // Flag for entering edge interrupter
 unsigned int first_button_edge = 1; // Flag for button edge
 
@@ -190,7 +190,7 @@ unsigned char Characters[][8] = {
 // Call this function to boost the STM32F0xx clock to 48 MHz
 void SystemClock48MHz(void) {
 
-	// Disable the PLL
+    // Disable the PLL
     RCC->CR &= ~(RCC_CR_PLLON);
 
     // Wait for the PLL to unlock
@@ -370,82 +370,84 @@ void myEXTI_Init() {
 // This handler is declared in system/src/cmsis/vectors_stm32f051x8.c
 void EXTI0_1_IRQHandler() {
 	
-	volatile unsigned int count = 0;
-	volatile double sig_period = 0;
+    volatile unsigned int count = 0;
+    volatile double sig_period = 0;
     volatile double sig_frequency = 0;
     volatile unsigned int uint_sig_period = 0;
     volatile unsigned int uint_sig_frequency = 0;
 
-	if ((EXTI->PR & EXTI_PR_PR0) != 0) {	// Button interrupt handler
-		// 2. Clear EXTI1 interrupt pending flag (EXTI->PR).
-		EXTI->PR |= ((uint32_t)0x00000001);		//NOTE: A pending register (PR) bit is cleared by writing 1 to it.
+    // Check if EXTI0 interrupt pending flag is set (for the button)
+    if ((EXTI->PR & EXTI_PR_PR0) != 0) {
+	
+	// Clear EXTI0 interrupt pending flag
+	EXTI->PR |= ((uint32_t)0x00000001); // A pending register (PR) bit is cleared by writing 1 to it
 
-		inSig ^= 0x1;					// Switch which input EXTI1(timer)/EXTI2(func gen) = 0/1
+	// Switch input: EXTI1(NE555 timer)/EXTI2(function generator) = 0/1        
+	inSig ^= 0x1;					
 
-		if(inSig == 0){ // EXTI1(timer)/EXTI2(sig) = 0/1
-			EXTI->IMR &= 0xFFFFFFFFB; // Disable IR 2 1011
-			EXTI->IMR |= 0x2; // Enable IR 1 0010
+	// Using EXTI1 (NE555 timer)
+	if(inSig == 0){
+		// Unmask interrupts from EXTI1 line
+		EXTI->IMR |= 0x2; // Set bit MR1 to 1 to unmask (see reference manual Page 199)
+		// Mask interrupts from EXTI2 line
+		EXTI->IMR &= 0xFFFFFFFFB; // Clear bit MR2 to 0 to mask (see reference manual Page 199)
+	} 
 
-		}else{
-			EXTI->IMR &= 0xFFFFFFFD; // Disable IR1 1101
-			EXTI->IMR |= 0x4; // Enable IR2 0100
+	// Using EXTI2 (function generator)
+	else {
+		// Mask interrupts from EXTI1 line
+		EXTI->IMR &= 0xFFFFFFFD; // Clear bit MR1 to 0 to mask (see reference manual Page 199)
+		// Unmask interrupts from EXTI2 line
+		EXTI->IMR |= 0x4; // Set bit MR2 to 1 to unmask (see reference manual Page 199)
+	}
+	    
+    }
 
-		}
+    // Check if EXTI1 interrupt pending flag is set (for the NE555 timer)
+    if ((EXTI->PR & EXTI_PR_PR1) != 0) {
+	
+	// Clear EXTI1 interrupt pending flag
+	EXTI->PR |= ((uint32_t)0x00000002); // A pending register (PR) bit is cleared by writing 1 to it
+
+	// Handle first edge
+	if(first_edge == 1) {
+		// Clear count register
+		TIM2->CNT = ((uint32_t)0x00000000);
+		// Start timer
+		TIM2->CR1 |= ((uint16_t)0x0001);
+		// Update flag
+		first_edge = 0;
+	}
+		
+	// Handle second edge
+	else {
+		// Stop timer
+		TIM2->CR1 &= ((uint16_t)0xFFFE);
+		// Read out count register
+		count = TIM2->CNT;
+		// Calculate signal period by changing from CPU frequency (48MHz) to microseconds
+		sig_period = count/48.0;
+		// Calculate signal frequency (+0.5 for rounding)
+		sig_frequency = (1000000.0/sig_period) + 0.5;
+		// Convert to unsigned int for printing
+		uint_sig_period = (unsigned int) sig_period;
+		uint_sig_frequency = (unsigned int) sig_frequency;
+		// Print calculated values to the console
+		trace_printf("Signal (Function Generator) Period:    %u us\n", uint_sig_period);
+		trace_printf("Signal (Function Generator) Frequency: %u Hz\n", uint_sig_frequency);
+		// Reset flag
+		first_edge = 1;
 	}
 
-
-	if ((EXTI->PR & EXTI_PR_PR1) != 0) // For measuring frequency on EXTI1 (NE555 Timer)
-	{
-		// 2. Clear EXTI1 interrupt pending flag (EXTI->PR).
-		EXTI->PR |= ((uint32_t)0x00000002);		//NOTE: A pending register (PR) bit is cleared by writing 1 to it.
-
-		// 1. If this is the first edge:
-		if(first_edge == 1)
-		{
-			//	- Clear count register (TIM2->CNT).
-			TIM2->CNT = ((uint32_t)0x00000000);
-
-			//	- Start timer (TIM2->CR1).
-			TIM2->CR1 |= ((uint16_t)0x0001);		// Or to keep everything else and only set bit0 to 1
-			first_edge = 0;
-
-		}else{//    Else (this is the second edge):
-			//	- Stop timer (TIM2->CR1).
-			TIM2->CR1 &= ((uint16_t)0xFFFE);		// E hex = 1110 bin, so we only disable the bit we want
-
-			//	- Read out count register (TIM2->CNT).
-			count = TIM2->CNT;
-
-			//	- Calculate signal period and frequency.
-			sig_period = count/48.0;		// Change from cpu freq (48MHz to microseconds)
-			sig_frequency = (1000000.0/sig_period) + 0.5;	// For double to int rounding
-
-			uint_sig_period = (unsigned int) sig_period;
-			uint_sig_frequency = (unsigned int) sig_frequency;
-
-
-			//	- Print calculated values to the console.
-			trace_printf("\nTimer Count is:\t %u \n", count);
-
-			trace_printf("Timer   Period is:\t %u us\n", uint_sig_period);
-			trace_printf("Timer     Frequency is:\t %u Hz\n\n", uint_sig_frequency);		// test for more int options
-			//	  NOTE: Function trace_printf does not work
-			//	  with floating-point numbers: you must use
-			//	  "unsigned int" type to print your signal
-			//	  period and frequency.
-
-			first_edge = 1;
-		}
-
-	}
+    }
 
 }
 
 // This handler is declared in system/src/cmsis/vectors_stm32f051x8.c
 void EXTI2_3_IRQHandler() {
 
-	volatile unsigned int count = 0;
-	volatile double sig_period = 0;
+    volatile unsigned int count = 0;
+    volatile double sig_period = 0;
     volatile double sig_frequency = 0;
     volatile unsigned int uint_sig_period = 0;
     volatile unsigned int uint_sig_frequency = 0;
