@@ -432,8 +432,8 @@ void EXTI0_1_IRQHandler() {
 		uint_sig_period = (unsigned int) sig_period;
 		uint_sig_frequency = (unsigned int) sig_frequency;
 		// Print calculated values to the console
-		trace_printf("Signal (Function Generator) Period:    %u us\n", uint_sig_period);
-		trace_printf("Signal (Function Generator) Frequency: %u Hz\n", uint_sig_frequency);
+		trace_printf("Signal (NE555 Timer) Period:    %u us\n", uint_sig_period);
+		trace_printf("Signal (NE555 Timer) Frequency: %u Hz\n", uint_sig_frequency);
 		// Reset flag
 		first_edge = 1;
 	}
