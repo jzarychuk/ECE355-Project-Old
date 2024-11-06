@@ -321,16 +321,14 @@ void myGPIOB_Init(void){
 		//Enable Clock
 		RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
 
-		// Configure PB3 and PB5 as output (AF0)
-		//GPIOB->MODER |= (GPIO_MODER_MODER3_1 | GPIO_MODER_MODER5_1); // See IO ex slide 47
-		// splitting this up because I don't know if these are the correct values from what the header is explaining - Jacob
-		GPIOB->PUPDR |= 0x10; // 1000 0000 (Set Bit 7)
-		GPIOB->PUPDR &= 0xFFFFFFBF; // 1011 1111 (Clear Bit 6)
-		GPIOB->PUPDR |= 0x800; // 1000 0000 0000 (Set Bit 11)
-		GPIOB->PUPDR &= 0xFFFFFBFF; // 1011 1111 1111 (Clear Bit 10)
+		// Configure PB3 and PB5 as AF
+		GPIOB->MODER |= (GPIO_MODER_MODER3_1 | GPIO_MODER_MODER5_1); // See IO ex slide 47
 
 		// Set to AF0 AFR[0] = AFRL, see ref manual
 		//GPIOB->AFR[0] |= (GPIO_AFRL_AFSEL3 | GPIO_AFRL_AFSEL5);
+		// another way... (see "IO" Slide 30 and "Interfacing" Slide 16)
+		// Configure PB3 and PB5 as AF0
+		GPIOB->AFR[0] &= 0xFF0F0FFF; // 0000 1111 0000 1111 1111 1111(zeros for AF0) // WHY IS "GPIOB->AFRL" NOT RESOLVING??? TAKING A GUESS AND USING "GPIOB->AFR[0]" INSTEAD
 
 		// Ensure no pull up/pull down for PB3 and PB5
 		//GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR3 | GPIO_PUPDR_PUPDR5); // See IO ex slide 47
@@ -347,10 +345,10 @@ void myGPIOB_Init(void){
 
 		// PB4, PB6, PB7 to Outputs (General purpose output mode)
 		// Set to Outputs (GP)
-		//GPIOB->MODER |= (GPIO_MODER_MODER4_0 | GPIO_MODER_MODER6_0 | GPIO_MODER_MODER7_0); // See IO ex slide 47, Ref man pg 159
+		GPIOB->MODER |= (GPIO_MODER_MODER4_0 | GPIO_MODER_MODER6_0 | GPIO_MODER_MODER7_0); // See IO ex slide 47, Ref man pg 159
 
-		// Ensure no pull up/pull down
-		//GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR4 | GPIO_PUPDR_PUPDR6 | GPIO_PUPDR_PUPDR7); // See IO ex slide 47
+		// Ensure no pull up/pull down for PB4, PB6, PB7
+		GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR4 | GPIO_PUPDR_PUPDR6 | GPIO_PUPDR_PUPDR7); // See IO ex slide 47
 
 		// Maybe need push-pull mode?
 
@@ -756,7 +754,8 @@ void oled_Write(unsigned char Value) {
 
     /* Wait until SPI1 is ready for writing (TXE = 1 in SPI1_SR) */
 
-	trace_printf("About to wait for TXE to be set (first wait)\n");
+	trace_printf("About to wait for TXE to be set (first wait) [GETS STUCK HERE]\n");
+	trace_printf("Was GPIOB->MODER set correctly? [0x%08X]\n", GPIOB->MODER); // 0101 1001 1000 0000 seems correct (3,5 as AF, and 4,5,6 as output)
 
 	while((SPI1->SR & 0x2) != 0); // (see reference manual Page 759)
     //...
