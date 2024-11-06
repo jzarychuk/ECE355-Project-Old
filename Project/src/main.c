@@ -304,14 +304,12 @@ void myGPIOA_Init() {
 	// Enable clock
 	RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
 
-	/* Configure PA2 as input */
-	// Relevant register: GPIOA->MODER
+	// Configure PA0-2 as input
 	GPIOA->MODER &= ~(GPIO_MODER_MODER0);
 	GPIOA->MODER &= ~(GPIO_MODER_MODER1);
 	GPIOA->MODER &= ~(GPIO_MODER_MODER2); //  (2) is referencing PA2
 
-	/* Ensure no pull-up/pull-down for PA2 */
-	// Relevant register: GPIOA->PUPDR
+	// Ensure no pull-up/pull-down for PA0-2
 	GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPDR0);
 	GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPDR1);
 	GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPDR2);
@@ -319,18 +317,27 @@ void myGPIOA_Init() {
 }
 
 void myGPIOB_Init(void){
-	//Enable Clock
-	RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
 
-	// PB3 and PB5 to be configured to be Output (AF0)
-		// Set to Outputs (AF)
-		GPIOB->MODER |= (GPIO_MODER_MODER3_1 | GPIO_MODER_MODER5_1); // See IO ex slide 47
+		//Enable Clock
+		RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
+
+		// Configure PB3 and PB5 as output (AF0)
+		//GPIOB->MODER |= (GPIO_MODER_MODER3_1 | GPIO_MODER_MODER5_1); // See IO ex slide 47
+		// splitting this up because I don't know if these are the correct values from what the header is explaining - Jacob
+		GPIOB->PUPDR |= 0x10; // 1000 0000 (Set Bit 7)
+		GPIOB->PUPDR &= 0xFFFFFFBF; // 1011 1111 (Clear Bit 6)
+		GPIOB->PUPDR |= 0x800; // 1000 0000 0000 (Set Bit 11)
+		GPIOB->PUPDR &= 0xFFFFFBFF; // 1011 1111 1111 (Clear Bit 10)
 
 		// Set to AF0 AFR[0] = AFRL, see ref manual
-		GPIOB->AFR[0] |= (GPIO_AFRL_AFSEL3 | GPIO_AFRL_AFSEL5);
+		//GPIOB->AFR[0] |= (GPIO_AFRL_AFSEL3 | GPIO_AFRL_AFSEL5);
 
-		// Ensure no pull up/pull down
-		GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR3 | GPIO_PUPDR_PUPDR5); // See IO ex slide 47
+		// Ensure no pull up/pull down for PB3 and PB5
+		//GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR3 | GPIO_PUPDR_PUPDR5); // See IO ex slide 47
+		// splitting this up to be safe...
+		GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR3);
+		GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR5);
+
 
 		// Maybe need push-pull mode?
 		//GPIOB->OTYPER &= ~(GPIO_PUPDR_PUPDR3 | GPIO_PUPDR_PUPDR5);
@@ -338,12 +345,12 @@ void myGPIOB_Init(void){
 		// Maybe need high-speed mode?
 		//GPIOB->OSPEEDR |= (GPIO_OSPEEDR_OSPEEDR4);
 
-	// PB4, PB6, PB7 to Outputs (General purpose output mode)
+		// PB4, PB6, PB7 to Outputs (General purpose output mode)
 		// Set to Outputs (GP)
-		GPIOB->MODER |= (GPIO_MODER_MODER4_0 | GPIO_MODER_MODER6_0 | GPIO_MODER_MODER7_0); // See IO ex slide 47, Ref man pg 159
+		//GPIOB->MODER |= (GPIO_MODER_MODER4_0 | GPIO_MODER_MODER6_0 | GPIO_MODER_MODER7_0); // See IO ex slide 47, Ref man pg 159
 
 		// Ensure no pull up/pull down
-		GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR4 | GPIO_PUPDR_PUPDR6 | GPIO_PUPDR_PUPDR7); // See IO ex slide 47
+		//GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR4 | GPIO_PUPDR_PUPDR6 | GPIO_PUPDR_PUPDR7); // See IO ex slide 47
 
 		// Maybe need push-pull mode?
 
@@ -772,9 +779,9 @@ void oled_Write(unsigned char Value) {
 
 void oled_config(void) {
 
-	// Don't forget to enable GPIOB clock in RCC - DONE
-	// Don't forget to configure PB3/PB5 as AF0 - DONE
-	// Don't forget to enable SPI1 clock in RCC - DONE
+	// Don't forget to enable GPIOB clock in RCC - DONE (OK)
+	// Don't forget to configure PB3/PB5 as AF0 - DONE (NOT SURE)
+	// Don't forget to enable SPI1 clock in RCC - DONE (OK)
 
 	// Enable SPI1 Clock
 	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
@@ -803,16 +810,20 @@ void oled_config(void) {
 
     // Reset LED Display (RES# = PB4):
 	   //- make pin PB4 = 0, wait for a few ms
-    	GPIOB->BSRR |= GPIO_BSRR_BS_4; // 0x00000010
+    	GPIOB->BRR |= 0x10; // writing this explicitly to test (see "IO" Slide 29) // 0001 0000
+    	//GPIOB->BSRR |= GPIO_BSRR_BS_4; // 0x00000010
     	delay(3);
 
     	//- make pin PB4 = 1, wait for a few ms
-    	GPIOB->BSRR |= GPIO_BSRR_BR_4; // 0x00100000
+    	GPIOB->BSRR |= 0x10; // writing this explicitly to test (see "IO" Slide 29) // 0001 0000
+    	//GPIOB->BSRR |= GPIO_BSRR_BR_4; // 0x00100000
     	delay(3);
 
 
     //...
 
+
+    trace_printf("About to send init commands to display\n");
 
 	// Send initialization commands to LED display
     for ( unsigned int i = 0; i < sizeof( oled_init_cmds ); i++ )
