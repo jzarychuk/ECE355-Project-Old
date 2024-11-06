@@ -12,6 +12,7 @@ C_SRCS += \
 ../system/src/stm32f0-hal/stm32f0xx_hal_iwdg.c \
 ../system/src/stm32f0-hal/stm32f0xx_hal_pwr.c \
 ../system/src/stm32f0-hal/stm32f0xx_hal_rcc.c \
+../system/src/stm32f0-hal/stm32f0xx_hal_spi.c \
 ../system/src/stm32f0-hal/stm32f0xx_hal_tsc.c 
 
 C_DEPS += \
@@ -23,6 +24,7 @@ C_DEPS += \
 ./system/src/stm32f0-hal/stm32f0xx_hal_iwdg.d \
 ./system/src/stm32f0-hal/stm32f0xx_hal_pwr.d \
 ./system/src/stm32f0-hal/stm32f0xx_hal_rcc.d \
+./system/src/stm32f0-hal/stm32f0xx_hal_spi.d \
 ./system/src/stm32f0-hal/stm32f0xx_hal_tsc.d 
 
 OBJS += \
@@ -34,11 +36,19 @@ OBJS += \
 ./system/src/stm32f0-hal/stm32f0xx_hal_iwdg.o \
 ./system/src/stm32f0-hal/stm32f0xx_hal_pwr.o \
 ./system/src/stm32f0-hal/stm32f0xx_hal_rcc.o \
+./system/src/stm32f0-hal/stm32f0xx_hal_spi.o \
 ./system/src/stm32f0-hal/stm32f0xx_hal_tsc.o 
 
 
 # Each subdirectory must supply rules for building sources it contributes
 system/src/stm32f0-hal/%.o: ../system/src/stm32f0-hal/%.c system/src/stm32f0-hal/subdir.mk
+	@echo 'Building file: $<'
+	@echo 'Invoking: GNU Arm Cross C Compiler'
+	arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -Og -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -fno-move-loop-invariants -Wall -Wextra -g3 -DDEBUG -DUSE_FULL_ASSERT -DTRACE -DOS_USE_TRACE_SEMIHOSTING_DEBUG -DSTM32F051x8 -DUSE_HAL_DRIVER -DHSE_VALUE=8000000 -I"../include" -I"../system/include" -I"../system/include/cmsis" -I"../system/include/stm32f0-hal" -std=gnu11 -Wno-unused-parameter -Wno-conversion -Wno-sign-conversion -MMD -MP -MF"$(@:%.o=%.d)" -MT"$@" -c -o "$@" "$<"
+	@echo 'Finished building: $<'
+	@echo ' '
+
+system/src/stm32f0-hal/stm32f0xx_hal_spi.o: ../system/src/stm32f0-hal/stm32f0xx_hal_spi.c system/src/stm32f0-hal/subdir.mk
 	@echo 'Building file: $<'
 	@echo 'Invoking: GNU Arm Cross C Compiler'
 	arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -Og -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -fno-move-loop-invariants -Wall -Wextra -g3 -DDEBUG -DUSE_FULL_ASSERT -DTRACE -DOS_USE_TRACE_SEMIHOSTING_DEBUG -DSTM32F051x8 -DUSE_HAL_DRIVER -DHSE_VALUE=8000000 -I"../include" -I"../system/include" -I"../system/include/cmsis" -I"../system/include/stm32f0-hal" -std=gnu11 -Wno-unused-parameter -Wno-conversion -Wno-sign-conversion -MMD -MP -MF"$(@:%.o=%.d)" -MT"$@" -c -o "$@" "$<"

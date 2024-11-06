@@ -259,7 +259,9 @@ int main(int argc, char* argv[]) {
 	myADC_Init();
 	myDAC_Init();
 	myGPIOB_Init();
+	trace_printf("Done myGPIOB_Init\n");
 	oled_config();
+	trace_printf("Done oled_config (about to enter infinte loop)\n");
 
 	// Infinite loop
 	while(1) {
@@ -746,18 +748,25 @@ void oled_Write_Data(unsigned char data) {
 void oled_Write(unsigned char Value) {
 
     /* Wait until SPI1 is ready for writing (TXE = 1 in SPI1_SR) */
+
+	trace_printf("About to wait for TXE to be set (first wait)\n");
+
 	while((SPI1->SR & 0x2) != 0); // (see reference manual Page 759)
     //...
+
+	trace_printf("Done first wait\n");
 
     /* Send one 8-bit character:
        - This function also sets BIDIOE = 1 in SPI1_CR1
     */
     HAL_SPI_Transmit(&SPI_Handle, &Value, 1, HAL_MAX_DELAY);
 
+    trace_printf("About to wait for TXE to be set (second wait)\n");
 
     /* Wait until transmission is complete (TXE = 1 in SPI1_SR) */
     while((SPI1->SR & 0x2) != 0); // (see reference manual Page 759)
     //...
+    trace_printf("Done second wait\n");
 
 }
 
@@ -811,6 +820,7 @@ void oled_config(void) {
         oled_Write_Cmd( oled_init_cmds[i] );
     }
 
+    trace_printf("Done sending init commands to display\n");
 
     /* Fill LED Display data memory (GDDRAM) with zeros:
        - for each PAGE = 0, 1, ..., 7
@@ -820,7 +830,7 @@ void oled_config(void) {
 
     //...
     // Go through all pages
-    for (unsigned char i = 0xB0 = 0; i < 0xB8; i++) {
+    for (unsigned char i = 0xB0; i < 0xB8; i++) {
 
     	// Select PAGEi
     	oled_Write_Cmd(i);
@@ -837,6 +847,8 @@ void oled_config(void) {
     	}
 
     }
+
+    trace_printf("Done writing zeros to all pages (last step)\n");
 
 }
 
