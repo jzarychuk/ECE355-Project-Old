@@ -1,7 +1,7 @@
 /*
  *  ECE355 Project
  *  Benjamin B Jackson		V00919896
- *  Jacob Arychuk		V00975301
+ *  Jacob Arychuk			V00975301
  *
  *  This project is an embedded system for monitoring two signals. An outside
  *  signal generated input on pin PA2 a pulsewidth-modulated (PWM) signal
@@ -259,7 +259,7 @@ int main(int argc, char* argv[]) {
 	myADC_Init();
 	myDAC_Init();
 	myGPIOB_Init();
-	//oled_config();
+	oled_config();
 
 	// Infinite loop
 	while(1) {
@@ -655,8 +655,20 @@ void refresh_OLED(void) {
            send 8 bytes in Characters[c][0-7] to LED Display
     */
 
-    //...
-
+    //... (see "Interfacing" Slides 34-35)
+    // Select PAGE2
+    oled_Write_Cmd(0xB2);
+    // Select SEG3 (lower half)
+    oled_Write_Cmd(0x03);
+    // Select SEG3 (upper half)
+    oled_Write_Cmd(0x10);
+    // Read characters from buffer until reaching null terminator
+    for (int i = 0; buffer[i] != '\0'; i++) {
+    	// Retrieve 8 bytes and send them one at a time to LED display
+    	for (int j = 0; j < 8; j++) {
+    		oled_Write_Data(Characters[(int)buffer[i]][j]); // Cast buffer[i] to int to get ASCII code
+    	}
+    }
 
     snprintf(buffer, sizeof(buffer), "F: %5u Hz", freq);
     /* Buffer now contains your character ASCII codes for LED Display
@@ -665,7 +677,21 @@ void refresh_OLED(void) {
            send 8 bytes in Characters[c][0-7] to LED Display
     */
 
-    //...
+    // Same as above, but using PAGE4
+
+    // Select PAGE4
+    oled_Write_Cmd(0xB4);
+    // Select SEG3 (lower half)
+    oled_Write_Cmd(0x03);
+    // Select SEG3 (upper half)
+    oled_Write_Cmd(0x10);
+    // Read characters from buffer until reaching null terminator
+    for (int i = 0; buffer[i] != '\0'; i++) {
+    	// Retrieve 8 bytes and send them one at a time to LED display
+    	for (int j = 0; j < 8; j++) {
+    		oled_Write_Data(Characters[(int)buffer[i]][j]); // Cast buffer[i] to int to get ASCII code
+    	}
+    }
 
 
 	/* Wait for ~100 ms (for example) to get ~10 frames/sec refresh rate
@@ -673,33 +699,54 @@ void refresh_OLED(void) {
     */
 
     //...
+    delay(100);
 
 }
 
 void oled_Write_Cmd(unsigned char cmd) {
 
-    //... // make PB6 = CS# = 1
-    //... // make PB7 = D/C# = 0
-    //... // make PB6 = CS# = 0
+	// (see "IO" Slide 29)
+
+	// Set PB6 = CS# = 1
+    GPIOB->BSRR |= 0x40; // 0100 0000
+
+    // Set PB7 = D/C# = 0
+    GPIOB->BRR |= 0x80; // 1000 0000
+
+    // Set PB6 = CS# = 0
+    GPIOB->BRR |= 0x40; // 0100 0000
+
     oled_Write(cmd);
-    //... // make PB6 = CS# = 1
+
+    // Set PB6 = CS# = 1
+    GPIOB->BSRR |= 0x40; // 0100 0000
 
 }
 
 void oled_Write_Data(unsigned char data) {
 
-    //... // make PB6 = CS# = 1
-    //... // make PB7 = D/C# = 1
-    //... // make PB6 = CS# = 0
+	// (see "IO" Slide 29)
+
+    // Set PB6 = CS# = 1
+	GPIOB->BSRR |= 0x40; // 0100 0000
+
+    // Set PB7 = D/C# = 1
+	GPIOB->BSRR |= 0x80; // 1000 0000
+
+    //Set PB6 = CS# = 0
+	GPIOB->BRR |= 0x40; // 0100 0000
+
     oled_Write(data);
-    //... // make PB6 = CS# = 1
+
+    // Set PB6 = CS# = 1
+    GPIOB->BSRR |= 0x40; // 0100 0000
 
 }
 
 void oled_Write(unsigned char Value) {
 
     /* Wait until SPI1 is ready for writing (TXE = 1 in SPI1_SR) */
-	while((SPI1->SR & 0x80) != 0);
+	while((SPI1->SR & 0x2) != 0); // (see reference manual Page 759)
     //...
 
     /* Send one 8-bit character:
@@ -709,7 +756,7 @@ void oled_Write(unsigned char Value) {
 
 
     /* Wait until transmission is complete (TXE = 1 in SPI1_SR) */
-
+    while((SPI1->SR & 0x2) != 0); // (see reference manual Page 759)
     //...
 
 }
@@ -724,7 +771,7 @@ void oled_config(void) {
 	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
 
 	// Definitions
-	SPI_HandleTypeDef SPI_Handle;  // This here? Interface ex slide 26
+	//SPI_HandleTypeDef SPI_Handle;  // This here? Interface ex slide 26 // ALREADY DECLARED AT TOP (REDECLARING HERE CAUSES PARAMETER ISSUE WITH HAL)
 
     SPI_Handle.Instance = SPI1;
 
@@ -772,6 +819,24 @@ void oled_config(void) {
     */
 
     //...
+    // Go through all pages
+    for (unsigned char i = 0xB0 = 0; i < 0xB8; i++) {
+
+    	// Select PAGEi
+    	oled_Write_Cmd(i);
+
+    	// Set SEG0 (lower half)
+    	oled_Write_Cmd(0x00);
+
+    	// Set SEG0 (upper half)
+    	oled_Write_Cmd(0x10);
+
+    	// Write zeros to every SEG (128 times)
+    	for (int j = 0; j < 128; j++) {
+    		oled_Write_Data(0x00);
+    	}
+
+    }
 
 }
 
