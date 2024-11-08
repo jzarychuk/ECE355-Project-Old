@@ -23,32 +23,27 @@
 #pragma GCC diagnostic ignored "-Wreturn-type"
 
 // Definitions
-#define myTIM2_PRESCALER ((uint16_t)0x0000) // Clock prescaler for TIM2 timer (no prescaling)
-#define myTIM2_PERIOD ((uint32_t)0xFFFFFFFF) // Maximum possible setting for overflow
-#define myTIM3_PRESCALER ((uint16_t)0x0000) // Clock prescaler for TIM2 timer (no prescaling)
-#define myTIM3_PERIOD ((uint32_t)0xFFFFFFFF) // Maximum possible setting for overflow
-#define sysClock 48000000	// System clock speed
+#define myTIM2_PRESCALER ((uint16_t)0x0000) 		// Clock prescaler for TIM2 timer (no prescaling)
+#define myTIM2_PERIOD ((uint32_t)0xFFFFFFFF) 		// Maximum possible setting for overflow
+#define myTIM3_PRESCALER ((uint16_t)0x0000) 		// Clock prescaler for TIM3 timer (no prescaling)
+#define myTIM3_PERIOD ((uint32_t)0xFFFFFFFF) 		// Maximum possible setting for overflow
+#define sysClock 48000000							// System clock speed
 
 SPI_HandleTypeDef SPI_Handle;
 
-
-// Function Initializers
 void myGPIOA_Init(void);
-void myADC_Init(void);
-void myDAC_Init(void);
+void myGPIOB_Init(void);
 void myTIM2_Init(void);
 void myTIM3_Init(void);
 void myEXTI_Init(void);
-void myGPIOB_Init(void);
-void delay(uint32_t time);
-
+void myADC_Init(void);
+void myDAC_Init(void);
+void oled_config(void);
+void refresh_OLED(void);
 void oled_Write(unsigned char);
 void oled_Write_Cmd(unsigned char);
 void oled_Write_Data(unsigned char);
-void oled_config(void);
-void refresh_OLED(void);
-
-SPI_HandleTypeDef SPI_Handle;
+void delay(uint32_t time);
 
 // Initialization commands for LED display
 unsigned char oled_init_cmds[] = {
@@ -73,12 +68,7 @@ unsigned char oled_init_cmds[] = {
     0xA0
 };
 
-//
-// Character specifications for LED Display (1 row = 8 bytes = 1 ASCII character)
-// Example: to display '4', retrieve 8 data bytes stored in Characters[52][X] row
-//          (where X = 0, 1, ..., 7) and send them one by one to LED Display.
-// Row number = character ASCII code (e.g., ASCII code of '4' is 0x34 = 52)
-//
+// Character specifications for LED display (1 row = 8 bytes = 1 ASCII character)
 unsigned char Characters[][8] = {
     {0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000,0b00000000, 0b00000000, 0b00000000},  // SPACE
     {0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000,0b00000000, 0b00000000, 0b00000000},  // SPACE
@@ -237,15 +227,11 @@ void SystemClock48MHz(void) {
 }
 
 // Global Variables
-unsigned int freq = 0;			// Frequency from either sig gen or timer
-unsigned int res = 0;			// Resistance from Pot
-unsigned int inSig = 1; 		// Using input EXTI1(NE555 timer)/EXTI2(function generator) = 0/1
-unsigned int first_edgeTimer = 0; 	// Handle first/second = 0/1 edge of Timer signal
-unsigned int first_edgeSigGen = 0; 	// Handle first/second = 0/1 edge of Signal Generator signal
-
-//test
-volatile uint8_t timer_done = 0; // Flag to indicate the delay has completed
-int i=0;
+unsigned int freq = 0;					// Frequency from either function generator or NE555 timer
+unsigned int res = 0;					// Resistance from potentiometer
+unsigned int inSig = 1; 				// Using input EXTI1(NE555 timer)/EXTI2(function generator) = 0/1
+unsigned int first_edgeTimer = 0; 		// Handle first/second = 0/1 edge of NE555 timer signal
+unsigned int first_edgeSigGen = 0; 		// Handle first/second = 0/1 edge of function generator signal
 
 int main(int argc, char* argv[]) {
 
@@ -253,15 +239,13 @@ int main(int argc, char* argv[]) {
 	trace_printf("System clock: %u Hz\n", SystemCoreClock);
 
 	myGPIOA_Init();
+	myGPIOB_Init();
 	myTIM2_Init();
 	myTIM3_Init();
 	myEXTI_Init();
 	myADC_Init();
 	myDAC_Init();
-	myGPIOB_Init();
-	trace_printf("Done myGPIOB_Init\n");
 	oled_config();
-	trace_printf("Done oled_config (about to enter infinte loop)\n");
 
 	// Infinite loop
 	while(1) {
@@ -273,10 +257,10 @@ int main(int argc, char* argv[]) {
 		while((ADC1->ISR & 0x2) == 0);
 
 		// Read low 12 bits from ADC1 data register
-		unsigned int adc_value = (((ADC1->DR & 0xFFF)*5000)/4096); // Max resistance is 5k Ohms
+		unsigned int adc_value = (ADC1->DR & 0xFFF);
 
-		// Print value (0-4095)
-		//trace_printf("Value going to ADC from POT: %u\n", adc_value);
+		res = (int)((adc_value * 5000 ) / 4095); // Max resistance is 5k Ohms
+		//trace_printf("Value going to ADC from POT: %u\tres = %u\n", adc_value, res);
 
 		// Send value from ADC to DAC
 		DAC1->DHR12R1 = ADC1->DR & 0xFFF;
@@ -316,53 +300,35 @@ void myGPIOA_Init() {
 
 }
 
-void myGPIOB_Init(void){
+void myGPIOB_Init(void) {
 
 		//Enable Clock
 		RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
 
-		// Configure PB3 and PB5 as AF
-		GPIOB->MODER |= (GPIO_MODER_MODER3_1 | GPIO_MODER_MODER5_1); // See IO ex slide 47
+		// Configure PB3 and PB5 as AF (see "I/O Examples" Slide 47)
+		GPIOB->MODER |= (GPIO_MODER_MODER3_1 | GPIO_MODER_MODER5_1);
 
-		// Set to AF0 AFR[0] = AFRL, see ref manual
-		//GPIOB->AFR[0] |= (GPIO_AFRL_AFSEL3 | GPIO_AFRL_AFSEL5);
-		// another way... (see "IO" Slide 30 and "Interfacing" Slide 16)
-		// Configure PB3 and PB5 as AF0
-		GPIOB->AFR[0] &= 0xFF0F0FFF; // 0000 1111 0000 1111 1111 1111(zeros for AF0) // WHY IS "GPIOB->AFRL" NOT RESOLVING??? TAKING A GUESS AND USING "GPIOB->AFR[0]" INSTEAD
+		// Set to AF0 AFR[0] = AFRL (see reference manual)
+		GPIOB->AFR[0] &= ~(GPIO_AFRL_AFSEL3 | GPIO_AFRL_AFSEL5);
 
-		// Ensure no pull up/pull down for PB3 and PB5
-		//GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR3 | GPIO_PUPDR_PUPDR5); // See IO ex slide 47
-		// splitting this up to be safe...
-		GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR3);
-		GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR5);
+		// Ensure no pull-up/pull down for PB3 and PB5 (see "I/O Examples" Slide 47)
+		GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR3 | GPIO_PUPDR_PUPDR5);
 
+		// Configure PB4, PB6, PB7 as output (see "I/O Examples" Slide 47 and reference manual Page 159)
+		GPIOB->MODER |= (GPIO_MODER_MODER4_0 | GPIO_MODER_MODER6_0 | GPIO_MODER_MODER7_0);
 
-		// Maybe need push-pull mode?
-		//GPIOB->OTYPER &= ~(GPIO_PUPDR_PUPDR3 | GPIO_PUPDR_PUPDR5);
-
-		// Maybe need high-speed mode?
-		//GPIOB->OSPEEDR |= (GPIO_OSPEEDR_OSPEEDR4);
-
-		// PB4, PB6, PB7 to Outputs (General purpose output mode)
-		// Set to Outputs (GP)
-		GPIOB->MODER |= (GPIO_MODER_MODER4_0 | GPIO_MODER_MODER6_0 | GPIO_MODER_MODER7_0); // See IO ex slide 47, Ref man pg 159
-
-		// Ensure no pull up/pull down for PB4, PB6, PB7
-		GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR4 | GPIO_PUPDR_PUPDR6 | GPIO_PUPDR_PUPDR7); // See IO ex slide 47
-
-		// Maybe need push-pull mode?
-
-		// Maybe need high-speed mode?
+		// Ensure no pull-up/pull-down for PB4, PB6, PB7 (see "I/O Examples" Slide 47)
+		GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR4 | GPIO_PUPDR_PUPDR6 | GPIO_PUPDR_PUPDR7);
 
 }
 
 void myADC_Init() {
 
 	// Enable clock
-	RCC->APB2ENR |= 0x200; // Set Bit 9 (see "Interfacing" Slide 15)
+	RCC->APB2ENR |= 0x200; // Set Bit 9 (see "Interfacing Examples" Slide 15)
 
 	// Configure PA5 as analog
-	GPIOA->MODER |= 0xC00; // Set Bit 10-11 (see "I/O" Slide 25)
+	GPIOA->MODER |= 0xC00; // Set Bit 10-11 (see "I/O Examples" Slide 25)
 
 	// Configure ADC
 	ADC1->CFGR1 &= 0xFFFFFFE7; // Clear Bit 3-4 to choose 12-bit resolution (see "Interfacing" Slide 10)
@@ -371,13 +337,13 @@ void myADC_Init() {
 	ADC1->CFGR1 |= 0x2000; // Set Bit 13 for continuous conversion mode (see "Interfacing" Slide 10)
 
 	// Select Channel 5 for conversion
-	ADC1->CHSELR |= 0x20;// Set Bit 5 (see "Interfacing" Slide 9)
+	ADC1->CHSELR |= 0x20;// Set Bit 5 (see "Interfacing Examples" Slide 9)
 
 	// Enable taking as many clock cycles as necessary to get reliable sample of analog signal
-	ADC1->SMPR |= 0x7; //Set Bit 0-2 (see "Interfacing" Slide 9)
+	ADC1->SMPR |= 0x7; //Set Bit 0-2 (see "Interfacing Examples" Slide 9)
 
 	// Enable ADC process (basic initialization)
-	ADC1->CR |= 0x1; // Set Bit 0 (see "Interfacing" Slide 8)
+	ADC1->CR |= 0x1; // Set Bit 0 (see "Interfacing Examples" Slide 8)
 
 	// Wait for ADC ready flag to be set
 	while(((ADC1->ISR & 0x1) == 0));
@@ -387,14 +353,14 @@ void myADC_Init() {
 void myDAC_Init() {
 
 	// Enable clock
-	RCC->APB1ENR |= 0x20000000; // Set Bit 29 (see "Interfacing" Slide 15)
+	RCC->APB1ENR |= 0x20000000; // Set Bit 29 (see "Interfacing Examples" Slide 15)
 
 	// Configure PA4 as analog
-	GPIOA->MODER |= 0x300; // Set Bit 8-9 (see "I/O" Slide 25)
+	GPIOA->MODER |= 0x300; // Set Bit 8-9 (see "I/O Examples" Slide 25)
 
 	// Configure DAC
-	DAC1->CR |= 0x1; // Set Bit 0 to enable Channel 1 (see "Interfacing" Slide 14)
-	DAC1->CR &= 0xFFFFFFF9; // Clear Bit 1-2 to enable output buffer and disable trigger (see "Interfacing" Slide 14)
+	DAC1->CR |= 0x1; // Set Bit 0 to enable Channel 1 (see "Interfacing Examples" Slide 14)
+	DAC1->CR &= 0xFFFFFFF9; // Clear Bit 1-2 to enable output buffer and disable trigger (see "Interfacing Examples" Slide 14)
 
 }
 
@@ -416,16 +382,13 @@ void myTIM2_Init(void) {
 	TIM2->EGR = ((uint16_t)0x0001);
 
 	// Assign TIM2 interrupt priority = 0 in NVIC
-	NVIC_SetPriority(TIM2_IRQn, 0); // Same as: NVIC->IP[3] = ((uint32_t)0x00FFFFFF);
+	NVIC_SetPriority(TIM2_IRQn, 0);
 
 	// Enable TIM2 interrupts in NVIC
-	NVIC_EnableIRQ(TIM2_IRQn); // Same as: NVIC->ISER[0] = ((uint32_t)0x00008000) */
+	NVIC_EnableIRQ(TIM2_IRQn);
 
 	// Enable update interrupt generation
 	TIM2->DIER |= TIM_DIER_UIE;
-
-	// Start counting timer pulses
-	// TIM2->CR1 |= TIM_CR1_CEN; // THIS IS COMMENTED OUT IN THE LAB 2 CODE
 
 }
 
@@ -485,8 +448,8 @@ void TIM3_IRQHandler(void) {
 
 void myEXTI_Init() {
 
-	// Map EXTI0-2 lines to PA0-2
-	SYSCFG->EXTICR[0] &= ((uint16_t)0xF000); //  to enable PA0-2 and keep other bits same 1111 0000 0000 0000 (see reference manual Page 172)
+	// Map EXTI0-2 lines to PA0-2 (see reference manual Page 172)
+	SYSCFG->EXTICR[0] &= ((uint16_t)0xF000);
 
 	// EXTI0-2 line interrupts: set rising-edge trigger
 	EXTI->RTSR |= ((uint32_t)0x00000007);  // Set bits TR0-2 to 1 to enable (see reference manual Page 200)
@@ -494,17 +457,17 @@ void myEXTI_Init() {
 	// Unmask interrupts from EXTI0 line
 	EXTI->IMR |= ((uint32_t)0x00000001); // Set bit MR0 to 1 to unmask (see reference manual Page 199)
 
-	// Mask interrupts from EXTI1 line (We want to start with the Function Generator
+	// Mask interrupts from EXTI1 line (starting with function generator)
 	EXTI->IMR &= 0xFFFFFFFD; // Clear bit MR1 to 0 to mask (see reference manual Page 199)
 
 	// Unmask interrupts from EXTI2 line
 	EXTI->IMR |= 0x4; // Set bit MR2 to 1 to unmask (see reference manual Page 199)
 
-	// Assign EXTI0-3 interrupt priority = 0 in NVIC (we are not using EXTI3)
-	NVIC_SetPriority(EXTI0_1_IRQn, 0); // Found in header, setting lines 0-1 to 0 // (can also use NVIC->IP)
-	NVIC_SetPriority(EXTI2_3_IRQn, 0); // Found in header, setting lines 2-3 to 0 // (can also use NVIC->IP)
+	// Assign EXTI0-3 interrupt priority = 0 in NVIC (not using EXTI3)
+	NVIC_SetPriority(EXTI0_1_IRQn, 0);
+	NVIC_SetPriority(EXTI2_3_IRQn, 0);
 
-	// Enable EXTI interrupts in NVIC (we are not using EXTI3)
+	// Enable EXTI interrupts in NVIC (not using EXTI3)
 	NVIC_EnableIRQ(EXTI0_1_IRQn); // Enable interrupts for EXTI0 (button) and EXTI1 (NE555 timer)
 	NVIC_EnableIRQ(EXTI2_3_IRQn); // Enable interrupts for EXTI2 (function generator) and EXTI3 (not used)
 
@@ -516,17 +479,12 @@ void EXTI0_1_IRQHandler() {
     volatile unsigned int count = 0;
     volatile double sig_period = 0;
     volatile double sig_frequency = 0;
-    volatile unsigned int uint_sig_period = 0;
-    volatile unsigned int uint_sig_frequency = 0;
 
     // Check if EXTI0 interrupt pending flag is set (for the button)
     if ((EXTI->PR & EXTI_PR_PR0) != 0) {
-		//EXTI->PR |= ((uint32_t)0x00000001); // A pending register (PR) bit is cleared by writing 1 to it
 
 		// Switch input: EXTI1(NE555 timer)/EXTI2(function generator) = 0/1
 		inSig ^= 0x1;
-
-		i=0;	//Tester to only print 5 readings so that printf doesnt interfere with interrupts
 
 		// Using EXTI1 (NE555 timer)
 		if(inSig == 0){
@@ -548,7 +506,6 @@ void EXTI0_1_IRQHandler() {
 	EXTI->PR |= ((uint32_t)0x00000001); // A pending register (PR) bit is cleared by writing 1 to it
 
     }
-
 
     // Check if EXTI1 interrupt pending flag is set (for the NE555 timer)
     if ((EXTI->PR & EXTI_PR_PR1) != 0) {
@@ -574,20 +531,12 @@ void EXTI0_1_IRQHandler() {
 		sig_period = (int)period_calc(count);
 		// Calculate signal frequency (+ 0.5 for rounding)
 		sig_frequency = frequency_calc(count, sig_period);
-		// Convert to unsigned int for printing
-		uint_sig_period = (unsigned int) sig_period;
-		uint_sig_frequency = (unsigned int) sig_frequency;
-		// Print calculated values to the console
-		if(i<5){
-			trace_printf("Signal (NE555 Timer) Frequency:\t%u Hz\n", uint_sig_frequency);
-			i++;
-		}
-
+		freq = (unsigned int) sig_frequency;
 		// Reset flag
 		first_edgeTimer = 0;
 	}
 
-	// Clear EXTI1 interrupt pending flag (do not put this before due to messing up timings!)
+	// Clear EXTI1 interrupt pending flag
 	EXTI->PR |= ((uint32_t)0x00000002); // A pending register (PR) bit is cleared by writing 1 to it
 
     }
@@ -600,12 +549,9 @@ void EXTI2_3_IRQHandler() {
     volatile unsigned int count = 0;
     volatile double sig_period = 0;
     volatile double sig_frequency = 0;
-    volatile unsigned int uint_sig_period = 0;
-    volatile unsigned int uint_sig_frequency = 0;
 
-	// Check if EXTI2 interrupt pending flag is set (for the function generator)
+    // Check if EXTI2 interrupt pending flag is set (for the function generator)
 	if ((EXTI->PR & EXTI_PR_PR2) != 0) {
-		//EXTI->PR |= ((uint32_t)0x00000004); // A pending register (PR) bit is cleared by writing 1 to it
 
 		// Handle first edge
 		if(first_edgeSigGen == 0) {
@@ -627,48 +573,37 @@ void EXTI2_3_IRQHandler() {
 			sig_period = period_calc(count);
 			// Calculate signal frequency (+ 0.5 for rounding)
 			sig_frequency = frequency_calc(count, sig_period);
-			// Convert to unsigned int for printing
-			uint_sig_period = (unsigned int) sig_period;
-			uint_sig_frequency = (unsigned int) sig_frequency;
-			// Print calculated values to the console
-			if(i<5){
-				trace_printf("Signal (Function Generator) Frequency:\t%u Hz\n", uint_sig_frequency);
-				i++;
-			}
-
+			freq = (unsigned int) sig_frequency;
 			// Reset flag
 			first_edgeSigGen = 0;
 		}
 
-		// Clear EXTI2 interrupt pending flag (do not put this before due to messing up timings!)
+		// Clear EXTI2 interrupt pending flag
 		EXTI->PR |= ((uint32_t)0x00000004); // A pending register (PR) bit is cleared by writing 1 to it
 
 	}
 
 }
 
-//
-// LED Display Functions
-//
 void refresh_OLED(void) {
 
-    // Buffer size = at most 16 characters per PAGE + terminating '\0'
+    // Buffer size = at most 16 characters per PAGE + null terminator
     unsigned char buffer[17];
 
-    snprintf(buffer, sizeof(buffer), "R: %5u Ohms", res);
+    snprintf((char*)buffer, sizeof(buffer), "R: %5u Ohms", res); // Cast to char instead of using unsigned char
     /* Buffer now contains your character ASCII codes for LED Display
        - select PAGE (LED Display line) and set starting SEG (column)
        - for each c = ASCII code = Buffer[0], Buffer[1], ...,
-           send 8 bytes in Characters[c][0-7] to LED Display
-    */
+           send 8 bytes in Characters[c][0-7] to LED Display (see "Interfacing" Slides 34-35)
+     */
 
-    //... (see "Interfacing" Slides 34-35)
     // Select PAGE2
     oled_Write_Cmd(0xB2);
     // Select SEG3 (lower half)
     oled_Write_Cmd(0x03);
     // Select SEG3 (upper half)
     oled_Write_Cmd(0x10);
+
     // Read characters from buffer until reaching null terminator
     for (int i = 0; buffer[i] != '\0'; i++) {
     	// Retrieve 8 bytes and send them one at a time to LED display
@@ -677,7 +612,7 @@ void refresh_OLED(void) {
     	}
     }
 
-    snprintf(buffer, sizeof(buffer), "F: %5u Hz", freq);
+    snprintf((char*)buffer, sizeof(buffer), "F: %5u Hz", freq); // Cast to char instead of using unsigned char
     /* Buffer now contains your character ASCII codes for LED Display
        - select PAGE (LED Display line) and set starting SEG (column)
        - for each c = ASCII code = Buffer[0], Buffer[1], ...,
@@ -704,92 +639,70 @@ void refresh_OLED(void) {
 	/* Wait for ~100 ms (for example) to get ~10 frames/sec refresh rate
        - You should use TIM3 to implement this delay (e.g., via polling)
     */
-
-    //...
     delay(100);
 
 }
 
 void oled_Write_Cmd(unsigned char cmd) {
 
-	// (see "IO" Slide 29)
-
 	// Set PB6 = CS# = 1
-    GPIOB->BSRR |= 0x40; // 0100 0000
+    GPIOB->BSRR |= GPIO_BSRR_BS_6;
 
     // Set PB7 = D/C# = 0
-    GPIOB->BRR |= 0x80; // 1000 0000
+    GPIOB->BSRR |= GPIO_BSRR_BR_7;
 
     // Set PB6 = CS# = 0
-    GPIOB->BRR |= 0x40; // 0100 0000
+    GPIOB->BSRR |= GPIO_BSRR_BR_6;
 
     oled_Write(cmd);
 
     // Set PB6 = CS# = 1
-    GPIOB->BSRR |= 0x40; // 0100 0000
+    GPIOB->BSRR |= GPIO_BSRR_BS_6;
 
 }
 
 void oled_Write_Data(unsigned char data) {
 
-	// (see "IO" Slide 29)
-
     // Set PB6 = CS# = 1
-	GPIOB->BSRR |= 0x40; // 0100 0000
+	GPIOB->BSRR |= GPIO_BSRR_BS_6;
 
     // Set PB7 = D/C# = 1
-	GPIOB->BSRR |= 0x80; // 1000 0000
+	GPIOB->BSRR |= GPIO_BSRR_BS_7;
 
     //Set PB6 = CS# = 0
-	GPIOB->BRR |= 0x40; // 0100 0000
+	GPIOB->BSRR |= GPIO_BSRR_BR_6;
 
     oled_Write(data);
 
     // Set PB6 = CS# = 1
-    GPIOB->BSRR |= 0x40; // 0100 0000
+    GPIOB->BSRR |= GPIO_BSRR_BS_6;
 
 }
 
 void oled_Write(unsigned char Value) {
 
-    /* Wait until SPI1 is ready for writing (TXE = 1 in SPI1_SR) */
+    // Wait until SPI1 is ready for writing
+	while((SPI1->SR & 0x2) == 0); // Wait for TXE = 1 in SPI1_SR (see reference manual Page 759)
 
-	trace_printf("About to wait for TXE to be set (first wait) [GETS STUCK HERE]\n");
-	trace_printf("Was GPIOB->MODER set correctly? [0x%08X]\n", GPIOB->MODER); // 0101 1001 1000 0000 seems correct (3,5 as AF, and 4,5,6 as output)
-
-	while((SPI1->SR & 0x2) != 0); // (see reference manual Page 759)
-    //...
-
-	trace_printf("Done first wait\n");
-
-    /* Send one 8-bit character:
-       - This function also sets BIDIOE = 1 in SPI1_CR1
-    */
+    // Send one 8-bit character (this function also sets BIDIOE = 1 in SPI1_CR1
     HAL_SPI_Transmit(&SPI_Handle, &Value, 1, HAL_MAX_DELAY);
 
-    trace_printf("About to wait for TXE to be set (second wait)\n");
-
-    /* Wait until transmission is complete (TXE = 1 in SPI1_SR) */
-    while((SPI1->SR & 0x2) != 0); // (see reference manual Page 759)
-    //...
-    trace_printf("Done second wait\n");
+    // Wait until transmission is complete (TXE = 1 in SPI1_SR) */
+    while((SPI1->SR & 0x2) == 0); // Wait for TXE = 1 in SPI1_SR (see reference manual Page 759)
 
 }
 
 void oled_config(void) {
 
 	// Don't forget to enable GPIOB clock in RCC - DONE (OK)
-	// Don't forget to configure PB3/PB5 as AF0 - DONE (NOT SURE)
+	// Don't forget to configure PB3/PB5 as AF0 - DONE (OK - GPIOBinit)
 	// Don't forget to enable SPI1 clock in RCC - DONE (OK)
 
 	// Enable SPI1 Clock
 	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
 
 	// Definitions
-	//SPI_HandleTypeDef SPI_Handle;  // This here? Interface ex slide 26 // ALREADY DECLARED AT TOP (REDECLARING HERE CAUSES PARAMETER ISSUE WITH HAL)
-
     SPI_Handle.Instance = SPI1;
-
     SPI_Handle.Init.Direction = SPI_DIRECTION_1LINE;
     SPI_Handle.Init.Mode = SPI_MODE_MASTER;
     SPI_Handle.Init.DataSize = SPI_DATASIZE_8BIT;
@@ -807,30 +720,16 @@ void oled_config(void) {
     __HAL_SPI_ENABLE( &SPI_Handle );
 
 
-    // Reset LED Display (RES# = PB4):
-	   //- make pin PB4 = 0, wait for a few ms
-    	GPIOB->BRR |= 0x10; // writing this explicitly to test (see "IO" Slide 29) // 0001 0000
-    	//GPIOB->BSRR |= GPIO_BSRR_BS_4; // 0x00000010
-    	delay(3);
-
-    	//- make pin PB4 = 1, wait for a few ms
-    	GPIOB->BSRR |= 0x10; // writing this explicitly to test (see "IO" Slide 29) // 0001 0000
-    	//GPIOB->BSRR |= GPIO_BSRR_BR_4; // 0x00100000
-    	delay(3);
-
-
-    //...
-
-
-    trace_printf("About to send init commands to display\n");
+    // Reset LED display
+	GPIOB->BSRR |= GPIO_BSRR_BR_4; 		// Make pin PB4 (RES#) = 0
+	delay(3); 							// Wait for 3 ms
+	GPIOB->BSRR |= GPIO_BSRR_BS_4; 		// Make pin PB4 (RES#) = 1
+	delay(3);							// Wait for a few ms
 
 	// Send initialization commands to LED display
-    for ( unsigned int i = 0; i < sizeof( oled_init_cmds ); i++ )
-    {
+    for ( unsigned int i = 0; i < sizeof( oled_init_cmds ); i++ ) {
         oled_Write_Cmd( oled_init_cmds[i] );
     }
-
-    trace_printf("Done sending init commands to display\n");
 
     /* Fill LED Display data memory (GDDRAM) with zeros:
        - for each PAGE = 0, 1, ..., 7
@@ -838,7 +737,6 @@ void oled_config(void) {
            call oled_Write_Data( 0x00 ) 128 times
     */
 
-    //...
     // Go through all pages
     for (unsigned char i = 0xB0; i < 0xB8; i++) {
 
@@ -846,7 +744,7 @@ void oled_config(void) {
     	oled_Write_Cmd(i);
 
     	// Set SEG0 (lower half)
-    	oled_Write_Cmd(0x00);
+    	oled_Write_Cmd(0x02);	// Always start lower at 02
 
     	// Set SEG0 (upper half)
     	oled_Write_Cmd(0x10);
@@ -858,18 +756,15 @@ void oled_config(void) {
 
     }
 
-    trace_printf("Done writing zeros to all pages (last step)\n");
-
 }
 
-void delay(uint32_t time){	// milliseconds
+void delay(uint32_t time){	// Milliseconds
 
 	// Clear count register
 	TIM3->CNT = ((uint32_t)0x00000000);
 
 	// Start timer
 	TIM3->CR1 |= TIM_CR1_CEN;
-	// Update flag
 
 	// Wait for updated event
 	while (TIM3->CNT < time);
