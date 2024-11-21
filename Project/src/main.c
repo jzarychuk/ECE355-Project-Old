@@ -31,11 +31,11 @@
 
 SPI_HandleTypeDef SPI_Handle;
 
-void myGPIOA_Init(void);
+void GPIOA_Init(void);
 void myGPIOB_Init(void);
 void TIM2_Init(void);
 void myTIM3_Init(void);
-void myEXTI_Init(void);
+void EXTI_Init(void);
 void ADC_Init(void);
 void DAC_Init(void);
 void oled_config(void);
@@ -238,11 +238,11 @@ int main(int argc, char* argv[]) {
 	SystemClock48MHz();
 	trace_printf("System clock: %u Hz\n", SystemCoreClock);
 
-	myGPIOA_Init();
+	GPIOA_Init();
 	myGPIOB_Init();
 	TIM2_Init();
 	myTIM3_Init();
-	myEXTI_Init();
+	EXTI_Init();
 	ADC_Init();
 	DAC_Init();
 	oled_config();
@@ -283,17 +283,17 @@ double frequency_calc(unsigned int count, double sig_period) {
 	return (1000000.0/sig_period) + 0.5;
 }
 
-void myGPIOA_Init() {
+void GPIOA_Init() {
 
-	// Enable clock
+	// Enable clock for GPIOA
 	RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
 
-	// Configure PA0-2 as input
+	// Configure PA0-2 as input mode
 	GPIOA->MODER &= ~(GPIO_MODER_MODER0);
 	GPIOA->MODER &= ~(GPIO_MODER_MODER1);
-	GPIOA->MODER &= ~(GPIO_MODER_MODER2); //  (2) is referencing PA2
+	GPIOA->MODER &= ~(GPIO_MODER_MODER2);
 
-	// Ensure no pull-up/pull-down for PA0-2
+	// Set no pull-up/pull-down for PA0-2
 	GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPDR0);
 	GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPDR1);
 	GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPDR2);
@@ -444,30 +444,30 @@ void TIM3_IRQHandler(void) {
 }
 
 
-void myEXTI_Init() {
+void EXTI_Init() {
 
-	// Map EXTI0-2 lines to PA0-2 (see reference manual Page 172)
+	// Map EXTI0-2 to PA0-2
 	SYSCFG->EXTICR[0] &= ((uint16_t)0xF000);
 
-	// EXTI0-2 line interrupts: set rising-edge trigger
-	EXTI->RTSR |= ((uint32_t)0x00000007);  // Set bits TR0-2 to 1 to enable (see reference manual Page 200)
+	// Set rising-edge trigger for EXTI0-2
+	EXTI->RTSR |= ((uint32_t)0x00000007);
 
 	// Unmask interrupts from EXTI0 line
-	EXTI->IMR |= ((uint32_t)0x00000001); // Set bit MR0 to 1 to unmask (see reference manual Page 199)
+	EXTI->IMR |= ((uint32_t)0x00000001);
 
-	// Mask interrupts from EXTI1 line (starting with function generator)
-	EXTI->IMR &= 0xFFFFFFFD; // Clear bit MR1 to 0 to mask (see reference manual Page 199)
+	// Mask interrupts from EXTI1 line (not starting with NE555 timer)
+	EXTI->IMR &= 0xFFFFFFFD;
 
-	// Unmask interrupts from EXTI2 line
-	EXTI->IMR |= 0x4; // Set bit MR2 to 1 to unmask (see reference manual Page 199)
+	// Unmask interrupts from EXTI2 line (starting with function generator)
+	EXTI->IMR |= 0x4;
 
-	// Assign EXTI0-3 interrupt priority = 0 in NVIC (not using EXTI3)
+	// Set EXTI0-3 interrupt priority in NVIC
 	NVIC_SetPriority(EXTI0_1_IRQn, 0);
 	NVIC_SetPriority(EXTI2_3_IRQn, 0);
 
-	// Enable EXTI interrupts in NVIC (not using EXTI3)
-	NVIC_EnableIRQ(EXTI0_1_IRQn); // Enable interrupts for EXTI0 (button) and EXTI1 (NE555 timer)
-	NVIC_EnableIRQ(EXTI2_3_IRQn); // Enable interrupts for EXTI2 (function generator) and EXTI3 (not used)
+	// Enable EXTI interrupts in NVIC
+	NVIC_EnableIRQ(EXTI0_1_IRQn);
+	NVIC_EnableIRQ(EXTI2_3_IRQn);
 
 }
 
