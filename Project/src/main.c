@@ -1,7 +1,7 @@
 /*
  *  ECE355 Project
  *  Benjamin B Jackson		V00919896
- *  Jacob Arychuk			V00975301
+ *  Jacob Arychuk		V00975301
  *
  *  This project is an embedded system for monitoring two signals. An outside
  *  signal generated input on pin PA2 a pulsewidth-modulated (PWM) signal
@@ -27,17 +27,17 @@
 #define myTIM2_PERIOD ((uint32_t)0xFFFFFFFF) 		// Maximum possible setting for overflow
 #define myTIM3_PRESCALER ((uint16_t)0x0000) 		// Clock prescaler for TIM3 timer (no prescaling)
 #define myTIM3_PERIOD ((uint32_t)0xFFFFFFFF) 		// Maximum possible setting for overflow
-#define sysClock 48000000							// System clock speed
+#define sysClock 48000000				// System clock speed
 
 SPI_HandleTypeDef SPI_Handle;
 
 void myGPIOA_Init(void);
 void myGPIOB_Init(void);
-void myTIM2_Init(void);
+void TIM2_Init(void);
 void myTIM3_Init(void);
 void myEXTI_Init(void);
-void myADC_Init(void);
-void myDAC_Init(void);
+void ADC_Init(void);
+void DAC_Init(void);
 void oled_config(void);
 void refresh_OLED(void);
 void oled_Write(unsigned char);
@@ -227,9 +227,9 @@ void SystemClock48MHz(void) {
 }
 
 // Global Variables
-unsigned int freq = 0;					// Frequency from either function generator or NE555 timer
-unsigned int res = 0;					// Resistance from potentiometer
-unsigned int inSig = 1; 				// Using input EXTI1(NE555 timer)/EXTI2(function generator) = 0/1
+unsigned int freq = 0;				// Frequency from either function generator or NE555 timer
+unsigned int res = 0;				// Resistance from potentiometer
+unsigned int inSig = 1; 			// Using input EXTI1(NE555 timer)/EXTI2(function generator) = 0/1
 unsigned int first_edgeTimer = 0; 		// Handle first/second = 0/1 edge of NE555 timer signal
 unsigned int first_edgeSigGen = 0; 		// Handle first/second = 0/1 edge of function generator signal
 
@@ -240,23 +240,23 @@ int main(int argc, char* argv[]) {
 
 	myGPIOA_Init();
 	myGPIOB_Init();
-	myTIM2_Init();
+	TIM2_Init();
 	myTIM3_Init();
 	myEXTI_Init();
-	myADC_Init();
-	myDAC_Init();
+	ADC_Init();
+	DAC_Init();
 	oled_config();
 
 	// Infinite loop
 	while(1) {
 
-		// Set Bit 2 to start conversion process (see "Interfacing" Slide 8)
+		// Start conversion process
 		ADC1->CR |= 0x4;
 
-		// Wait for end of conversion flag (Bit 2) to be set
+		// Wait until end of conversion flag is set
 		while((ADC1->ISR & 0x2) == 0);
 
-		// Read low 12 bits from ADC1 data register
+		// Read the low 12 bits from data register
 		unsigned int adc_value = (ADC1->DR & 0xFFF);
 
 		res = (int)((adc_value * 5000 ) / 4095); // Max resistance is 5k Ohms
@@ -322,90 +322,88 @@ void myGPIOB_Init(void) {
 
 }
 
-void myADC_Init() {
+void ADC_Init() {
 
-	// Enable clock
-	RCC->APB2ENR |= 0x200; // Set Bit 9 (see "Interfacing Examples" Slide 15)
+	// Enable clock for ADC
+	RCC->APB2ENR |= 0x200;
 
-	// Configure PA5 as analog
-	GPIOA->MODER |= 0xC00; // Set Bit 10-11 (see "I/O Examples" Slide 25)
+	// Configure PA5 as analog mode
+	GPIOA->MODER |= 0xC00;
 
 	// Configure ADC
-	ADC1->CFGR1 &= 0xFFFFFFE7; // Clear Bit 3-4 to choose 12-bit resolution (see "Interfacing" Slide 10)
-	ADC1->CFGR1 &= 0xFFFFFFDF; // Clear Bit 5 for right-aligned data (see "Interfacing" Slide 10)
-	ADC1->CFGR1 |= 0x1000; // Set Bit 12 to overwrite when overrun detected (see "Interfacing" Slide 10)
-	ADC1->CFGR1 |= 0x2000; // Set Bit 13 for continuous conversion mode (see "Interfacing" Slide 10)
+	ADC1->CFGR1 &= 0xFFFFFFE7; 	// Set 12-bit resolution
+	ADC1->CFGR1 &= 0xFFFFFFDF; 	// Set right-aligned data
+	ADC1->CFGR1 |= 0x1000; 		// Set to overwrite contents when an overrun is detected
+	ADC1->CFGR1 |= 0x2000; 		// Enable continuous conversion mode
 
 	// Select Channel 5 for conversion
-	ADC1->CHSELR |= 0x20;// Set Bit 5 (see "Interfacing Examples" Slide 9)
+	ADC1->CHSELR |= 0x20;
 
-	// Enable taking as many clock cycles as necessary to get reliable sample of analog signal
-	ADC1->SMPR |= 0x7; //Set Bit 0-2 (see "Interfacing Examples" Slide 9)
+	// Set maximum sampling time
+	ADC1->SMPR |= 0x7;
 
-	// Enable ADC process (basic initialization)
-	ADC1->CR |= 0x1; // Set Bit 0 (see "Interfacing Examples" Slide 8)
+	// Enable ADC process
+	ADC1->CR |= 0x1;
 
-	// Wait for ADC ready flag to be set
+	// Wait until ADC ready flag is set
 	while(((ADC1->ISR & 0x1) == 0));
 
 }
 
-void myDAC_Init() {
+void DAC_Init() {
 
-	// Enable clock
-	RCC->APB1ENR |= 0x20000000; // Set Bit 29 (see "Interfacing Examples" Slide 15)
+	// Enable clock for DAC
+	RCC->APB1ENR |= 0x20000000;
 
-	// Configure PA4 as analog
-	GPIOA->MODER |= 0x300; // Set Bit 8-9 (see "I/O Examples" Slide 25)
+	// Configure PA4 as analog mode
+	GPIOA->MODER |= 0x300;
 
-	// Configure DAC
-	DAC1->CR |= 0x1; // Set Bit 0 to enable Channel 1 (see "Interfacing Examples" Slide 14)
-	DAC1->CR &= 0xFFFFFFF9; // Clear Bit 1-2 to enable output buffer and disable trigger (see "Interfacing Examples" Slide 14)
+	// Enable output channel
+	DAC1->CR |= 0x1;
+
+	// Enable output buffer and disable trigger
+	DAC1->CR &= 0xFFFFFFF9;
 
 }
 
-void myTIM2_Init(void) {
+void TIM2_Init(void) {
 
-	// Enable clock
+	// Enable clock for TIM2
 	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
 
-	// Configure: buffer auto-reload, count up, stop on overflow, enable update events, interrupt on overflow only
+	// Set configuration: buffer the TIM2_ARR register, count up, stop on overflow, generate interrupt on overflow
 	TIM2->CR1 = ((uint16_t)0x008C);
 
 	// Set clock prescaler value
-	TIM2->PSC = myTIM2_PRESCALER;
+	TIM2->PSC = TIM2_PRESCALER;
 
-	// Set auto-reloaded delay
-	TIM2->ARR = myTIM2_PERIOD;
+	// Set auto-reloading delay
+	TIM2->ARR = TIM2_PERIOD;
 
 	// Update timer registers
 	TIM2->EGR = ((uint16_t)0x0001);
 
-	// Assign TIM2 interrupt priority = 0 in NVIC
+	// Assign TIM2 interrupt priority in NVIC
 	NVIC_SetPriority(TIM2_IRQn, 0);
 
 	// Enable TIM2 interrupts in NVIC
 	NVIC_EnableIRQ(TIM2_IRQn);
 
-	// Enable update interrupt generation
+	// Enable TIM2 interrupts
 	TIM2->DIER |= TIM_DIER_UIE;
 
 }
 
 void TIM2_IRQHandler(void) {
 
-	// Check if update interrupt flag is set
-	if ((TIM2->SR & TIM_SR_UIF) != 0) {
+	// Check if update interrupt flag is not set
+	if ((TIM2->SR & TIM_SR_UIF) == 0) return;
 
-		trace_printf("\nOverflow!\n");
+	// Clear update interrupt flag
+	TIM2->SR &= ~(TIM_SR_UIF);
 
-		// Clear update interrupt flag
-		TIM2->SR &= ~(TIM_SR_UIF);
-
-		// Restart stopped timer
-		TIM2->CR1 |= TIM_CR1_CEN;
-
-	}
+	// Restart stopped timer
+	TIM2->CR1 |= TIM_CR1_CEN;
 
 }
 
