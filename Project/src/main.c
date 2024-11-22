@@ -23,10 +23,10 @@
 #pragma GCC diagnostic ignored "-Wreturn-type"
 
 // Definitions
-#define myTIM2_PRESCALER ((uint16_t)0x0000) 		// Clock prescaler for TIM2 timer (no prescaling)
-#define myTIM2_PERIOD ((uint32_t)0xFFFFFFFF) 		// Maximum possible setting for overflow
-#define myTIM3_PRESCALER ((uint16_t)0x0000) 		// Clock prescaler for TIM3 timer (no prescaling)
-#define myTIM3_PERIOD ((uint32_t)0xFFFFFFFF) 		// Maximum possible setting for overflow
+#define TIM2_PRESCALER ((uint16_t)0x0000) 		// Clock prescaler for TIM2 timer (no prescaling)
+#define TIM2_PERIOD ((uint32_t)0xFFFFFFFF) 		// Maximum possible setting for overflow
+#define TIM3_PRESCALER ((uint16_t)0x0000) 		// Clock prescaler for TIM3 timer (no prescaling)
+#define TIM3_PERIOD ((uint32_t)0xFFFFFFFF) 		// Maximum possible setting for overflow
 #define sysClock 48000000				// System clock speed
 
 SPI_HandleTypeDef SPI_Handle;
@@ -227,11 +227,10 @@ void SystemClock48MHz(void) {
 }
 
 // Global Variables
-unsigned int freq = 0;				// Frequency from either function generator or NE555 timer
-unsigned int res = 0;				// Resistance from potentiometer
-unsigned int inSig = 1; 			// Using input EXTI1(NE555 timer)/EXTI2(function generator) = 0/1
-unsigned int first_edgeTimer = 0; 		// Handle first/second = 0/1 edge of NE555 timer signal
-unsigned int first_edgeSigGen = 0; 		// Handle first/second = 0/1 edge of function generator signal
+unsigned int frequency = 0;			// Calculated frequency from either function generator or NE555 timer
+unsigned int resistance = 0;				// Resistance from potentiometer
+unsigned int input_signal = 1; 			// Using input EXTI1(NE555 timer)/EXTI2(function generator) = 0/1
+unsigned int first_edge = 0; 			// Handle first/second = 0/1 edge of input signal
 
 int main(int argc, char* argv[]) {
 
@@ -259,8 +258,8 @@ int main(int argc, char* argv[]) {
 		// Read the low 12 bits from data register
 		unsigned int adc_value = (ADC1->DR & 0xFFF);
 
-		res = (int)((adc_value * 5000 ) / 4095); // Max resistance is 5k Ohms
-		//trace_printf("Value going to ADC from POT: %u\tres = %u\n", adc_value, res);
+		resistance = (int)((adc_value * 5000 ) / 4095); // Max resistance is 5k Ohms
+		//trace_printf("Value going to ADC from POT: %u\tresistance = %u\n", adc_value, resistance);
 
 		// Send value from ADC to DAC
 		DAC1->DHR12R1 = ADC1->DR & 0xFFF;
@@ -271,16 +270,6 @@ int main(int argc, char* argv[]) {
 
 	return 0;
 
-}
-
-double period_calc(unsigned int count) {
-	// Calculate and return signal period by changing from CPU frequency (48MHz) to microseconds
-	return count/48.0;
-}
-
-double frequency_calc(unsigned int count, double sig_period) {
-	// Calculate and return signal frequency (+0.5 for rounding)
-	return (1000000.0/sig_period) + 0.5;
 }
 
 void GPIOA_Init() {
@@ -471,94 +460,46 @@ void EXTI_Init() {
 
 }
 
-// This handler is declared in system/src/cmsis/vectors_stm32f051x8.c
 void EXTI0_1_IRQHandler() {
 
-    volatile unsigned int count = 0;
-    volatile double sig_period = 0;
-    volatile double sig_frequency = 0;
-
-    // Check if EXTI0 interrupt pending flag is set (for the button)
-    if ((EXTI->PR & EXTI_PR_PR0) != 0) {
+	// Check if interrupt pending flag is set for EXTI0 (button)
+	if ((EXTI->PR & EXTI_PR_PR0) != 0) {
 
 		// Switch input: EXTI1(NE555 timer)/EXTI2(function generator) = 0/1
-		inSig ^= 0x1;
+		input_signal ^= 0x1;
 
-		// Using EXTI1 (NE555 timer)
-		if(inSig == 0){
+		// Use EXTI1 (NE555 timer)
+		if(input_signal == 0){
 			// Unmask interrupts from EXTI1 line
-			EXTI->IMR |= 0x2; // Set bit MR1 to 1 to unmask (see reference manual Page 199)
+			EXTI->IMR |= 0x2;
 			// Mask interrupts from EXTI2 line
-			EXTI->IMR &= 0xFFFFFFFFB; // Clear bit MR2 to 0 to mask (see reference manual Page 199)
+			EXTI->IMR &= 0xFFFFFFFFB;
 		}
 
-		// Using EXTI2 (function generator)
+		// Use EXTI2 (function generator)
 		else {
 			// Mask interrupts from EXTI1 line
-			EXTI->IMR &= 0xFFFFFFFD; // Clear bit MR1 to 0 to mask (see reference manual Page 199)
+			EXTI->IMR &= 0xFFFFFFFD;
 			// Unmask interrupts from EXTI2 line
-			EXTI->IMR |= 0x4; // Set bit MR2 to 1 to unmask (see reference manual Page 199)
+			EXTI->IMR |= 0x4;
 		}
 
-	// Clear EXTI0 interrupt pending flag
-	EXTI->PR |= ((uint32_t)0x00000001); // A pending register (PR) bit is cleared by writing 1 to it
+		// Clear interrupt pending flag for EXTI0
+		EXTI->PR |= ((uint32_t)0x00000001);
 
-    }
-
-    // Check if EXTI1 interrupt pending flag is set (for the NE555 timer)
-    if ((EXTI->PR & EXTI_PR_PR1) != 0) {
-	//EXTI->PR |= ((uint32_t)0x00000002); // A pending register (PR) bit is cleared by writing 1 to it
-
-	// Handle first edge
-	if(first_edgeTimer == 0) {
-		// Clear count register
-		TIM2->CNT = ((uint32_t)0x00000000);
-		// Start timer
-		TIM2->CR1 |= ((uint16_t)0x0001);
-		// Update flag
-		first_edgeTimer = 1;
 	}
 
-	// Handle second edge
-	else {
-		// Stop timer
-		TIM2->CR1 &= ((uint16_t)0xFFFE);
-		// Read out count register
-		count = TIM2->CNT;
-		// Calculate signal period by changing from CPU frequency (48MHz) to microseconds
-		sig_period = (int)period_calc(count);
-		// Calculate signal frequency (+ 0.5 for rounding)
-		sig_frequency = frequency_calc(count, sig_period);
-		freq = (unsigned int) sig_frequency;
-		// Reset flag
-		first_edgeTimer = 0;
-	}
-
-	// Clear EXTI1 interrupt pending flag
-	EXTI->PR |= ((uint32_t)0x00000002); // A pending register (PR) bit is cleared by writing 1 to it
-
-    }
-
-}
-
-// This handler is declared in system/src/cmsis/vectors_stm32f051x8.c
-void EXTI2_3_IRQHandler() {
-
-    volatile unsigned int count = 0;
-    volatile double sig_period = 0;
-    volatile double sig_frequency = 0;
-
-    // Check if EXTI2 interrupt pending flag is set (for the function generator)
-	if ((EXTI->PR & EXTI_PR_PR2) != 0) {
+	// Check if interrupt pending flag is set for EXTI1 (NE555 timer)
+	if ((EXTI->PR & EXTI_PR_PR1) != 0) {
 
 		// Handle first edge
-		if(first_edgeSigGen == 0) {
+		if(first_edge == 0) {
 			// Clear count register
 			TIM2->CNT = ((uint32_t)0x00000000);
 			// Start timer
 			TIM2->CR1 |= ((uint16_t)0x0001);
 			// Update flag
-			first_edgeSigGen = 1;
+			first_edge = 1;
 		}
 
 		// Handle second edge
@@ -566,18 +507,53 @@ void EXTI2_3_IRQHandler() {
 			// Stop timer
 			TIM2->CR1 &= ((uint16_t)0xFFFE);
 			// Read out count register
-			count = (int)TIM2->CNT;
-			// Calculate signal period by changing from CPU frequency (48MHz) to microseconds
-			sig_period = period_calc(count);
-			// Calculate signal frequency (+ 0.5 for rounding)
-			sig_frequency = frequency_calc(count, sig_period);
-			freq = (unsigned int) sig_frequency;
+			unsigned int count = TIM2->CNT;
+			// Period calculation: divide count by 48 MHz to get microseconds
+			double period = count/48.0;
+			// Frequency calculation: divide 1 by period and multiply by 1,000,000 to get hertz
+			frequency = (unsigned int)((1000000.0 / period) + 0.5);
 			// Reset flag
-			first_edgeSigGen = 0;
+			first_edge = 0;
 		}
 
-		// Clear EXTI2 interrupt pending flag
-		EXTI->PR |= ((uint32_t)0x00000004); // A pending register (PR) bit is cleared by writing 1 to it
+		// Clear interrupt pending flag for EXTI1
+		EXTI->PR |= ((uint32_t)0x00000002);
+
+	}
+
+}
+
+void EXTI2_3_IRQHandler() {
+
+	// Check if interrupt pending flag is set for EXTI2 (function generator)
+	if ((EXTI->PR & EXTI_PR_PR2) != 0) {
+
+		// Handle first edge
+		if(first_edge == 0) {
+			// Clear count register
+			TIM2->CNT = ((uint32_t)0x00000000);
+			// Start timer
+			TIM2->CR1 |= ((uint16_t)0x0001);
+			// Update flag
+			first_edge = 1;
+		}
+
+		// Handle second edge
+		else {
+			// Stop timer
+			TIM2->CR1 &= ((uint16_t)0xFFFE);
+			// Read out count register
+			unsigned int count = TIM2->CNT;
+			// Period calculation: divide count by 48 MHz to get microseconds
+			double period = count/48.0
+			// Frequency calculation: divide 1 by period and multiply by 1,000,000 to get hertz
+			frequency = (unsigned int)((1000000.0 / period) + 0.5);
+			// Reset flag
+			first_edge = 0;
+		}
+
+		// Clear interrupt pending flag for EXTI2
+		EXTI->PR |= ((uint32_t)0x00000004);
 
 	}
 
@@ -588,7 +564,7 @@ void refresh_OLED(void) {
     // Buffer size = at most 16 characters per PAGE + null terminator
     unsigned char buffer[17];
 
-    snprintf((char*)buffer, sizeof(buffer), "R: %5u Ohms", res); // Cast to char instead of using unsigned char
+    snprintf((char*)buffer, sizeof(buffer), "R: %5u Ohms", resistance); // Cast to char instead of using unsigned char
     /* Buffer now contains your character ASCII codes for LED Display
        - select PAGE (LED Display line) and set starting SEG (column)
        - for each c = ASCII code = Buffer[0], Buffer[1], ...,
@@ -610,7 +586,7 @@ void refresh_OLED(void) {
     	}
     }
 
-    snprintf((char*)buffer, sizeof(buffer), "F: %5u Hz", freq); // Cast to char instead of using unsigned char
+    snprintf((char*)buffer, sizeof(buffer), "F: %5u Hz", frequency); // Cast to char instead of using unsigned char
     /* Buffer now contains your character ASCII codes for LED Display
        - select PAGE (LED Display line) and set starting SEG (column)
        - for each c = ASCII code = Buffer[0], Buffer[1], ...,
