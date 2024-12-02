@@ -694,7 +694,7 @@ void Refresh_OLED (void) {
 
 }
 
-void Delay (uint32_t time) {	// Milliseconds
+void Delay (uint32_t time) { // Milliseconds
 
     // Clear count register
     TIM3->CNT = ((uint32_t)0x00000000);
