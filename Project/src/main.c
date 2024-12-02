@@ -3,7 +3,7 @@
 ECE 355: Microprocessor-Based Systems
 
 Jacob Arychuk
-Benjamin B Jackson
+Benjamin Jackson
 
 */
 
@@ -531,7 +531,7 @@ void EXTI2_3_IRQHandler () {
             // Read out count register
             unsigned int count = TIM2->CNT;
             // Period calculation: divide count by 48 MHz to get microseconds
-            double period = count/48.0
+            double period = count/48.0;
             // Frequency calculation: divide 1 by period and multiply by 1,000,000 to get hertz
             frequency = (unsigned int)((1000000.0 / period) + 0.5);
             // Reset flag
