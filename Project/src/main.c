@@ -584,7 +584,7 @@ void OLED_Write_Data (unsigned char data) {
 void OLED_Write (unsigned char Value) {
 
     // Wait until SPI is ready (TXE bit is set)
-	while ((SPI1->SR & 0x2) == 0);
+    while ((SPI1->SR & 0x2) == 0);
 
     // Send one byte (this function also sets BIDIOE = 1 in SPI1_CR1)
     HAL_SPI_Transmit(&SPI_Handle, &Value, 1, HAL_MAX_DELAY);
