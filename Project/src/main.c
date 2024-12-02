@@ -494,7 +494,7 @@ void EXTI0_1_IRQHandler () {
             TIM2->CR1 &= ((uint16_t)0xFFFE);
             // Read out count register
             unsigned int count = TIM2->CNT;
-            // Period calculation: divide count by 48 MHz to get ms
+            // Period calculation: divide count by 48 MHz to get μs
             double period = count/48.0;
             // Frequency calculation: divide 1 by period and multiply by 1,000,000 to get Hz
             frequency = (unsigned int)((1000000.0 / period) + 0.5);
@@ -530,9 +530,9 @@ void EXTI2_3_IRQHandler () {
             TIM2->CR1 &= ((uint16_t)0xFFFE);
             // Read out count register
             unsigned int count = TIM2->CNT;
-            // Period calculation: divide count by 48 MHz to get microseconds
+            // Period calculation: divide count by 48 MHz to get μs
             double period = count/48.0;
-            // Frequency calculation: divide 1 by period and multiply by 1,000,000 to get hertz
+            // Frequency calculation: divide 1 by period and multiply by 1,000,000 to get Hz
             frequency = (unsigned int)((1000000.0 / period) + 0.5);
             // Reset flag
             first_edge = 0;
