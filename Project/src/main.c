@@ -35,14 +35,14 @@ void GPIOA_Init(void);
 void GPIOB_Init(void);
 void TIM2_Init(void);
 void TIM3_Init(void);
-void EXTI_Init(void);
 void ADC_Init(void);
 void DAC_Init(void);
-void OLED_Config(void);
-void Refresh_OLED(void);
-void OLED_Write(unsigned char);
+void EXTI_Init(void);
 void OLED_Write_Cmd(unsigned char);
 void OLED_Write_Data(unsigned char);
+void OLED_Write(unsigned char);
+void OLED_Config(void);
+void Refresh_OLED(void);
 void Delay(uint32_t time);
 
 // Initialization commands for OLED display
@@ -234,9 +234,9 @@ int main (int argc, char* argv[]) {
     GPIOB_Init();
     TIM2_Init();
     TIM3_Init();
-    EXTI_Init();
     ADC_Init();
     DAC_Init();
+    EXTI_Init();
     OLED_Config();
 
 	while (1) {
@@ -255,7 +255,7 @@ int main (int argc, char* argv[]) {
         // Send value from ADC to DAC
         DAC1->DHR12R1 = ADC1->DR & 0xFFF;
 
-        refresh_OLED();
+        Refresh_OLED();
 
     }
 
@@ -299,50 +299,6 @@ void GPIOB_Init (void) {
 
     // Set no pull-up/pull-down for PB4, PB6, and PB7
     GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR4 | GPIO_PUPDR_PUPDR6 | GPIO_PUPDR_PUPDR7);
-
-}
-
-void ADC_Init () {
-
-    // Enable clock for ADC
-    RCC->APB2ENR |= 0x200;
-
-    // Configure PA5 as analog mode
-    GPIOA->MODER |= 0xC00;
-
-    // Configure ADC
-    ADC1->CFGR1 &= 0xFFFFFFE7; 	                  // Set 12-bit resolution
-    ADC1->CFGR1 &= 0xFFFFFFDF; 	                  // Set right-aligned data
-    ADC1->CFGR1 |= 0x1000; 		                  // Set to overwrite contents when an overrun is detected
-    ADC1->CFGR1 |= 0x2000; 		                  // Enable continuous conversion mode
-
-    // Select ADC_IN5 for conversion
-    ADC1->CHSELR |= 0x20;
-
-    // Set maximum sampling time
-    ADC1->SMPR |= 0x7;
-
-    // Enable ADC process
-    ADC1->CR |= 0x1;
-
-    // Wait until ADC ready flag is set
-    while (((ADC1->ISR & 0x1) == 0));
-
-}
-
-void DAC_Init () {
-
-    // Enable clock for DAC
-    RCC->APB1ENR |= 0x20000000;
-
-    // Configure PA4 as analog mode
-    GPIOA->MODER |= 0x300;
-
-    // Enable output channel
-    DAC1->CR |= 0x1;
-
-    // Enable output buffer and disable trigger
-    DAC1->CR &= 0xFFFFFFF9;
 
 }
 
@@ -416,6 +372,50 @@ void TIM3_IRQHandler (void) {
 
     // Restart stopped timer
     TIM3->CR1 |= TIM_CR1_CEN;
+
+}
+
+void ADC_Init () {
+
+    // Enable clock for ADC
+    RCC->APB2ENR |= 0x200;
+
+    // Configure PA5 as analog mode
+    GPIOA->MODER |= 0xC00;
+
+    // Configure ADC
+    ADC1->CFGR1 &= 0xFFFFFFE7; 	                  // Set 12-bit resolution
+    ADC1->CFGR1 &= 0xFFFFFFDF; 	                  // Set right-aligned data
+    ADC1->CFGR1 |= 0x1000; 		                  // Set to overwrite contents when an overrun is detected
+    ADC1->CFGR1 |= 0x2000; 		                  // Enable continuous conversion mode
+
+    // Select ADC_IN5 for conversion
+    ADC1->CHSELR |= 0x20;
+
+    // Set maximum sampling time
+    ADC1->SMPR |= 0x7;
+
+    // Enable ADC process
+    ADC1->CR |= 0x1;
+
+    // Wait until ADC ready flag is set
+    while (((ADC1->ISR & 0x1) == 0));
+
+}
+
+void DAC_Init () {
+
+    // Enable clock for DAC
+    RCC->APB1ENR |= 0x20000000;
+
+    // Configure PA4 as analog mode
+    GPIOA->MODER |= 0x300;
+
+    // Enable output channel
+    DAC1->CR |= 0x1;
+
+    // Enable output buffer and disable trigger
+    DAC1->CR &= 0xFFFFFFF9;
 
 }
 
@@ -545,51 +545,6 @@ void EXTI2_3_IRQHandler () {
 
 }
 
-void Refresh_OLED (void) {
-
-    // Buffer size (at most 16 characters per PAGE + null terminator)
-    unsigned char buffer[17];
-
-    // Format resistance value into the buffer
-    snprintf((char*)buffer, sizeof(buffer), "R: %5u Ohms", resistance);
-
-    // Select PAGE2
-    OLED_Write_Cmd(0xB2);
-    // Select SEG3 (lower half)
-    OLED_Write_Cmd(0x03);
-    // Select SEG3 (upper half)
-    OLED_Write_Cmd(0x10);
-
-    // Read characters from buffer until reaching null terminator
-    for (int i = 0; buffer[i] != '\0'; i++) {
-        // Retrieve 8 bytes and send them one at a time to OLED display
-        for (int j = 0; j < 8; j++) {
-            OLED_Write_Data(Characters[(int)buffer[i]][j]); // Cast buffer[i] to int to get ASCII code
-        }
-    }
-
-    // Format frequency value into the buffer
-    snprintf((char*)buffer, sizeof(buffer), "F: %5u Hz", frequency);
-
-    // Select PAGE4
-    OLED_Write_Cmd(0xB4);
-    // Select SEG3 (lower half)
-    OLED_Write_Cmd(0x03);
-    // Select SEG3 (upper half)
-    OLED_Write_Cmd(0x10);
-    // Read characters from buffer until reaching null terminator
-    for (int i = 0; buffer[i] != '\0'; i++) {
-        // Retrieve 8 bytes and send them one at a time to LED display
-        for (int j = 0; j < 8; j++) {
-            OLED_Write_Data(Characters[(int)buffer[i]][j]); // Cast buffer[i] to int to get ASCII code
-        }
-    }
-
-    // Wait for ~100 ms to get ~10 frames/sec refresh rate
-    Delay(100);
-
-}
-
 void OLED_Write_Cmd (unsigned char cmd) {
 
     // Set PB6 = CS# = 1
@@ -691,6 +646,51 @@ void OLED_Config (void) {
         }
 
     }
+
+}
+
+void Refresh_OLED (void) {
+
+    // Buffer size (at most 16 characters per PAGE + null terminator)
+    unsigned char buffer[17];
+
+    // Format resistance value into the buffer
+    snprintf((char*)buffer, sizeof(buffer), "R: %5u Ohms", resistance);
+
+    // Select PAGE2
+    OLED_Write_Cmd(0xB2);
+    // Select SEG3 (lower half)
+    OLED_Write_Cmd(0x03);
+    // Select SEG3 (upper half)
+    OLED_Write_Cmd(0x10);
+
+    // Read characters from buffer until reaching null terminator
+    for (int i = 0; buffer[i] != '\0'; i++) {
+        // Retrieve 8 bytes and send them one at a time to OLED display
+        for (int j = 0; j < 8; j++) {
+            OLED_Write_Data(Characters[(int)buffer[i]][j]); // Cast buffer[i] to int to get ASCII code
+        }
+    }
+
+    // Format frequency value into the buffer
+    snprintf((char*)buffer, sizeof(buffer), "F: %5u Hz", frequency);
+
+    // Select PAGE4
+    OLED_Write_Cmd(0xB4);
+    // Select SEG3 (lower half)
+    OLED_Write_Cmd(0x03);
+    // Select SEG3 (upper half)
+    OLED_Write_Cmd(0x10);
+    // Read characters from buffer until reaching null terminator
+    for (int i = 0; buffer[i] != '\0'; i++) {
+        // Retrieve 8 bytes and send them one at a time to LED display
+        for (int j = 0; j < 8; j++) {
+            OLED_Write_Data(Characters[(int)buffer[i]][j]); // Cast buffer[i] to int to get ASCII code
+        }
+    }
+
+    // Wait for ~100 ms to get ~10 frames/sec refresh rate
+    Delay(100);
 
 }
 
