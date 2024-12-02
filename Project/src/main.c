@@ -19,15 +19,15 @@ Benjamin B Jackson
 #pragma GCC diagnostic ignored "-Wreturn-type"
 
 // Global variables
-unsigned int frequency = 0;                       // Calculated frequency from either function generator or NE555 timer
-unsigned int resistance = 0;                      // Resistance from potentiometer
-unsigned int input_signal = 1;                    // Using input EXTI1(NE555 timer)/EXTI2(function generator) = 0/1
-unsigned int first_edge = 0;                      // Handle first/second = 0/1 edge of input signal
+unsigned int frequency = 0;    // Calculated frequency from either function generator or NE555 timer
+unsigned int resistance = 0;   // Resistance from potentiometer
+unsigned int input_signal = 1; // Using input EXTI1(NE555 timer)/EXTI2(function generator) = 0/1
+unsigned int first_edge = 0;   // Handle first/second = 0/1 edge of input signal
 
-#define TIM2_PRESCALER ((uint16_t)0x0000)         // Clock prescaler for TIM2 timer (no prescaling)
-#define TIM2_PERIOD ((uint32_t)0xFFFFFFFF)        // Maximum possible setting for overflow
-#define TIM3_PRESCALER ((uint16_t)(48000 - 1))    // Clock prescaler for TIM3 timer (milliseconds)
-#define TIM3_PERIOD ((uint32_t)0xFFFFFFFF)        // Maximum possible setting for overflow
+#define TIM2_PRESCALER ((uint16_t)0x0000)      // Clock prescaler for TIM2 timer (no prescaling)
+#define TIM2_PERIOD ((uint32_t)0xFFFFFFFF)     // Maximum possible setting for overflow
+#define TIM3_PRESCALER ((uint16_t)(48000 - 1)) // Clock prescaler for TIM3 timer (milliseconds)
+#define TIM3_PERIOD ((uint32_t)0xFFFFFFFF)     // Maximum possible setting for overflow
 
 SPI_HandleTypeDef SPI_Handle;
 
@@ -384,10 +384,10 @@ void ADC_Init () {
     GPIOA->MODER |= 0xC00;
 
     // Configure ADC
-    ADC1->CFGR1 &= 0xFFFFFFE7; 	                  // Set 12-bit resolution
-    ADC1->CFGR1 &= 0xFFFFFFDF; 	                  // Set right-aligned data
-    ADC1->CFGR1 |= 0x1000; 		                  // Set to overwrite contents when an overrun is detected
-    ADC1->CFGR1 |= 0x2000; 		                  // Enable continuous conversion mode
+    ADC1->CFGR1 &= 0xFFFFFFE7; // Set 12-bit resolution
+    ADC1->CFGR1 &= 0xFFFFFFDF; // Set right-aligned data
+    ADC1->CFGR1 |= 0x1000;     // Set to overwrite contents when an overrun is detected
+    ADC1->CFGR1 |= 0x2000;     // Enable continuous conversion mode
 
     // Select ADC_IN5 for conversion
     ADC1->CHSELR |= 0x20;
