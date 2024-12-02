@@ -618,10 +618,10 @@ void OLED_Config (void) {
     __HAL_SPI_ENABLE(&SPI_Handle);
 
     // Reset OLED display
-    GPIOB->BSRR |= GPIO_BSRR_BR_4; 		          // PB4 (RES#) = 0
-    Delay(3); 							          // Wait for 3 ms
-    GPIOB->BSRR |= GPIO_BSRR_BS_4; 		          // PB4 (RES#) = 1
-    Delay(3);							          // Wait for 3 ms
+    GPIOB->BSRR |= GPIO_BSRR_BR_4; // PB4 (RES#) = 0
+    Delay(3);                      // Wait for 3 ms
+    GPIOB->BSRR |= GPIO_BSRR_BS_4; // PB4 (RES#) = 1
+    Delay(3);                      // Wait for 3 ms
 
     // Send initialization commands to LED display
     for (unsigned int i = 0; i < sizeof(OLED_Init_Cmds); i++) {
