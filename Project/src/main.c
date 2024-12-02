@@ -5,7 +5,7 @@ ECE 355: Microprocessor-Based Systems
 Jacob Arychuk
 Benjamin B Jackson
 
- */
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
